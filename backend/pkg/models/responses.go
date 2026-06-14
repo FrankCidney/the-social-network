@@ -38,6 +38,11 @@ type FollowRequestResponse struct {
 	Status     string `json:"status"`
 }
 
+type ErrorStruct struct {
+	Code string `json:"code"`
+	Message string `json:"message"`
+}
+
 type ErrorResponse struct {
-	Error string `json:"error"`
+	Error ErrorStruct `json:"error"`
 }

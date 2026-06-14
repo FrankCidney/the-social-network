@@ -1,0 +1,52 @@
+package apperrors
+
+import "errors"
+
+var (
+	ErrNotFound = errors.New("not found")
+	ErrConflict     = errors.New("conflict")       // e.g. email already registered
+	ErrUnauthorized = errors.New("unauthorized")   // bad credentials or missing session
+	ErrForbidden    = errors.New("forbidden")      // authenticated but not allowed
+	ErrBadInput     = errors.New("bad input")      // validation failure
+	ErrInternal     = errors.New("internal error") // unexpected failures
+)
+
+// AppError wraps a sentinel with a human-readable message to return to the frontend
+type AppError struct {
+	Err     error  // sentinel errors to use in errors.Is checks to direct app flow
+	Message string // human readable message to send back to client
+}
+
+func (e *AppError) Error() string {
+	return e.Message
+}
+
+func (e *AppError) Unwrap() error {
+	return e.Err
+}
+
+// Constructors - these create wrapped errors (sentinel wrapped inside AppError)
+
+func NotFound(msg string) *AppError {
+	return &AppError{Err: ErrNotFound, Message: msg}
+}
+ 
+func Conflict(msg string) *AppError {
+	return &AppError{Err: ErrConflict, Message: msg}
+}
+ 
+func Unauthorized(msg string) *AppError {
+	return &AppError{Err: ErrUnauthorized, Message: msg}
+}
+ 
+func Forbidden(msg string) *AppError {
+	return &AppError{Err: ErrForbidden, Message: msg}
+}
+ 
+func BadInput(msg string) *AppError {
+	return &AppError{Err: ErrBadInput, Message: msg}
+}
+ 
+func Internal(msg string) *AppError {
+	return &AppError{Err: ErrInternal, Message: msg}
+}
