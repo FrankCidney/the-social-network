@@ -15,7 +15,7 @@ type User struct {
 	CreatedAt  string `json:"created_at"`
 }
 
-type session struct {
+type Session struct {
 	Token     string `json:"token"`
 	UserID    string `jsong:"user_id"`
 	CreatedAt string `json:"created_at"`
