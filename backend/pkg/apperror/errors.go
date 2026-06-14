@@ -3,7 +3,7 @@ package apperror
 import "errors"
 
 var (
-	ErrNotFound = errors.New("not found")
+	ErrNotFound     = errors.New("not found")
 	ErrConflict     = errors.New("conflict")       // e.g. email already registered
 	ErrUnauthorized = errors.New("unauthorized")   // bad credentials or missing session
 	ErrForbidden    = errors.New("forbidden")      // authenticated but not allowed
@@ -30,23 +30,23 @@ func (e *AppError) Unwrap() error {
 func NotFound(msg string) *AppError {
 	return &AppError{Err: ErrNotFound, Message: msg}
 }
- 
+
 func Conflict(msg string) *AppError {
 	return &AppError{Err: ErrConflict, Message: msg}
 }
- 
+
 func Unauthorized(msg string) *AppError {
 	return &AppError{Err: ErrUnauthorized, Message: msg}
 }
- 
+
 func Forbidden(msg string) *AppError {
 	return &AppError{Err: ErrForbidden, Message: msg}
 }
- 
+
 func BadInput(msg string) *AppError {
 	return &AppError{Err: ErrBadInput, Message: msg}
 }
- 
+
 func Internal(msg string) *AppError {
 	return &AppError{Err: ErrInternal, Message: msg}
 }

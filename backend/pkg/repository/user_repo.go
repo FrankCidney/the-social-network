@@ -32,7 +32,7 @@ func (r *sqliteUserRepo) CreateUser(u *models.User) error {
 		about_me, avatar_path, is_public, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
-	_, err := r.db.Exec(query, 
+	_, err := r.db.Exec(query,
 		u.ID, u.Email, u.Password, u.FirstName, u.LastName,
 		u.DOB, u.Nickname, u.AboutMe, u.AvatarPath,
 		booleanToInt(u.IsPublic), u.CreatedAt,
@@ -77,7 +77,7 @@ func (r *sqliteUserRepo) UpdateUser(u *models.User) error {
 		UPDATE users
 		SET first_name = ?, last_name = ?, dob = ?, nickname = ?, about_me = ?
 		WHERE id = ?`
- 
+
 	res, err := r.db.Exec(query,
 		u.FirstName, u.LastName, u.DOB, u.Nickname, u.AboutMe, u.ID,
 	)

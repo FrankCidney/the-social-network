@@ -18,7 +18,7 @@ type SessionRepository interface {
 type sqliteSessionRepo struct {
 	db *sql.DB
 }
- 
+
 func NewSessionRepository(db *sql.DB) SessionRepository {
 	return &sqliteSessionRepo{db: db}
 }
@@ -27,7 +27,7 @@ func (r *sqliteSessionRepo) CreateSession(s *models.Session) error {
 	const query = `
 		INSERT INTO sessions (token, user_id, created_at, expires_at)
 		VALUES (?, ?, ?, ?)`
- 
+
 	_, err := r.db.Exec(query, s.Token, s.UserID, s.CreatedAt, s.ExpiresAt)
 	if err != nil {
 		return fmt.Errorf("create session: %w", err)
@@ -40,7 +40,7 @@ func (r *sqliteSessionRepo) GetSessionByToken(token string) (*models.Session, er
 	const query = `
 		SELECT token, user_id, created_at, expires_at
 		FROM sessions WHERE token = ?`
- 
+
 	s := &models.Session{}
 	err := r.db.QueryRow(query, token).Scan(
 		&s.Token, &s.UserID, &s.CreatedAt, &s.ExpiresAt,
