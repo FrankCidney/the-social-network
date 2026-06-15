@@ -19,8 +19,8 @@ const (
 )
 
 type Service interface {
-	Register(req models.RegisterRequest) (*models.User, error)
-	Login(email, password string) (*models.Session, error) // login creates a session
+	Register(req models.RegisterRequest) (*models.AuthResponse, error)
+	Login(email, password string) (*models.AuthResponse, error) // login creates a session
 	Logout(sessionToken string) error
 	ValidateSession(token string) (*models.User, error) // called by middleware on every request
 }
@@ -30,9 +30,9 @@ type service struct {
 	sessions repository.SessionRepository
 }
 
-// func NewService(users repository.UserRepository, sessions repository.SessionRepository) Service {
-// 	return &service{users: users, sessions: sessions}
-// }
+func NewService(users repository.UserRepository, sessions repository.SessionRepository) Service {
+	return &service{users: users, sessions: sessions}
+}
 
 func (s *service) Register(req models.RegisterRequest) (*models.AuthResponse, error) {
 	if err := validateRegisterRequest(req); err != nil {
