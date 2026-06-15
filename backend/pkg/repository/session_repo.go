@@ -58,6 +58,7 @@ func (r *sqliteSessionRepo) GetSessionByToken(token string) (*models.Session, er
 func (r *sqliteSessionRepo) DeleteSession(token string) error {
 	const query = `DELETE FROM sessions WHERE token = ?`
 
+	// Exec doesn't error if the session doesn't exist
 	_, err := r.db.Exec(query, token)
 	if err != nil {
 		return fmt.Errorf("delete session: %w", err)

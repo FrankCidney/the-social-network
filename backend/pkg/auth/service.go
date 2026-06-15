@@ -7,10 +7,15 @@ import (
 	"social-network/pkg/repository"
 	"strings"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
+	"github.com/google/uuid"
 )
 
 const (
 	minPasswordLen  = 8
+	bcryptCost = 12
+	sessionDuration = 7 * 24 * time.Hour
 )
 
 type Service interface {
@@ -28,6 +33,102 @@ type service struct {
 // func NewService(users repository.UserRepository, sessions repository.SessionRepository) Service {
 // 	return &service{users: users, sessions: sessions}
 // }
+
+func (s *service) Register(req models.RegisterRequest) (*models.AuthResponse, error) {
+	if err := validateRegisterRequest(req); err != nil {
+		return nil, err
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcryptCost)
+	if err != nil {
+		return nil, fmt.Errorf("hash password: %w", err)
+	}
+
+	user := &models.User{
+		ID:        uuid.NewString(),
+		Email:     strings.ToLower(strings.TrimSpace(req.Email)),
+		Password:  string(hash),
+		FirstName: strings.TrimSpace(req.FirstName),
+		LastName:  strings.TrimSpace(req.LastName),
+		DOB:       req.DOB,
+		Nickname:  strings.TrimSpace(req.Nickname),
+		AboutMe:   strings.TrimSpace(req.AboutMe),
+		IsPublic:  true, // chose to set new accounts to public by default; editable after logging in
+		CreatedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+
+	if err := s.users.CreateUser(user); err != nil {
+		return nil, err
+	}
+
+	session, err := s.createSession(user.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.AuthResponse{
+		User: toPublicUser(user),
+		Token: session.Token,
+	}, nil
+}
+
+func (s *service) Login(email, password string) (*models.AuthResponse, error)  {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" || password == "" {
+		return nil, apperror.BadInput("email and password are required")
+	}
+
+	user, err := s.users.GetUserByEmail(email)
+	if err != nil {
+		return nil, err
+	}
+ 
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		return nil, apperror.Unauthorized("invalid credentials")
+	}
+
+	session, err := s.createSession(user.ID)
+	if err != nil {
+		return nil, err
+	}
+ 
+	return &models.AuthResponse{
+		User:  toPublicUser(user),
+		Token: session.Token,
+	}, nil
+}
+
+func (s *service) Logout(sessionToken string) error {
+	return s.sessions.DeleteSession(sessionToken)
+}
+
+func (s *service) ValidateSession(token string) (*models.User, error) {
+	if token == "" {
+		return nil, apperror.Unauthorized("missing session token")
+	}
+ 
+	session, err := s.sessions.GetSessionByToken(token)
+	if err != nil {
+		return nil, err
+	}
+
+	expiresAt, err := time.Parse(time.RFC3339, session.ExpiresAt)
+	if err != nil {
+		return nil, apperror.Internal("malformed session expiry")
+	}
+
+	if time.Now().UTC().After(expiresAt) {
+		_ = s.sessions.DeleteSession(token)
+		return nil, apperror.Unauthorized("session expired")
+	}
+
+	user, err := s.users.GetUserByID(session.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
 
 func validateRegisterRequest(req models.RegisterRequest) error {
 	req.Email= strings.TrimSpace(req.Email)
@@ -54,4 +155,33 @@ func validateRegisterRequest(req models.RegisterRequest) error {
 	}
 
 	return nil
+}
+
+func (s *service) createSession(userID string) (*models.Session, error) {
+	token := uuid.NewString()
+ 
+	now := time.Now().UTC()
+	session := &models.Session{
+		Token:     token,
+		UserID:    userID,
+		CreatedAt: now.Format(time.RFC3339),
+		ExpiresAt: now.Add(sessionDuration).Format(time.RFC3339),
+	}
+ 
+	if err := s.sessions.CreateSession(session); err != nil {
+		return nil, fmt.Errorf("persist session: %w", err)
+	}
+ 
+	return session, nil
+}
+
+func toPublicUser(u *models.User) *models.PublicUser {
+	return &models.PublicUser{
+		ID:         u.ID,
+		FirstName:  u.FirstName,
+		LastName:   u.LastName,
+		Nickname:   u.Nickname,
+		AvatarPath: u.AvatarPath,
+		IsPublic:   u.IsPublic,
+	}
 }
