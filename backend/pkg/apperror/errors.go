@@ -14,6 +14,7 @@ var (
 // AppError wraps a sentinel with a human-readable message to return to the frontend
 type AppError struct {
 	Err     error  // sentinel errors to use in errors.Is checks to direct app flow
+	Code string
 	Message string // human readable message to send back to client
 }
 
@@ -28,25 +29,25 @@ func (e *AppError) Unwrap() error {
 // Constructors - these create wrapped errors (sentinel wrapped inside AppError)
 
 func NotFound(msg string) *AppError {
-	return &AppError{Err: ErrNotFound, Message: msg}
+	return &AppError{Err: ErrNotFound, Code: "not_found", Message: msg}
 }
 
 func Conflict(msg string) *AppError {
-	return &AppError{Err: ErrConflict, Message: msg}
+	return &AppError{Err: ErrConflict, Code: "conflict", Message: msg}
 }
 
 func Unauthorized(msg string) *AppError {
-	return &AppError{Err: ErrUnauthorized, Message: msg}
+	return &AppError{Err: ErrUnauthorized, Code: "unauthorized", Message: msg}
 }
 
 func Forbidden(msg string) *AppError {
-	return &AppError{Err: ErrForbidden, Message: msg}
+	return &AppError{Err: ErrForbidden, Code: "forbidden", Message: msg}
 }
 
 func BadInput(msg string) *AppError {
-	return &AppError{Err: ErrBadInput, Message: msg}
+	return &AppError{Err: ErrBadInput, Code: "bad_input", Message: msg}
 }
 
 func Internal(msg string) *AppError {
-	return &AppError{Err: ErrInternal, Message: msg}
+	return &AppError{Err: ErrInternal, Code: "internal", Message: msg}
 }
