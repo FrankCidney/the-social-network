@@ -40,3 +40,14 @@ func RequireAuth(authService auth.Service, next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
+
+func expiredCookie() *http.Cookie {
+	return &http.Cookie{
+		Name:     "session_token",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	}
+}
