@@ -10,11 +10,12 @@ import (
 	"social-network/pkg/models"
 )
 
+// JSON writes v as a JSON body, with the given status code
 func JSON(w http.ResponseWriter, status int, v any) {
 	var buf bytes.Buffer
 	if err := json.NewEncoder(&buf).Encode(v); err != nil {
 		http.Error(w, "internal server error", http.StatusInternalServerError)
-		 slog.Error("response.JSON: encode failed", "error", err)
+		slog.Error("response.JSON: encode failed", "error", err)
         return
 	}
 
@@ -43,4 +44,9 @@ func Error(w http.ResponseWriter, err error, status int) {
 			Message: err.Error(),
 		},
 	})
+}
+
+// Tells the client everything is fine, but there's no content to send back
+func NoContent(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusNoContent)
 }

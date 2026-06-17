@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"social-network/pkg/apperror"
 	"social-network/pkg/auth"
+	"social-network/pkg/models"
 	"social-network/pkg/response"
 )
 
@@ -39,6 +40,14 @@ func RequireAuth(authService auth.Service, next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), UserContextKey, user)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func UserFromContext(ctx context.Context) *models.User {
+	user, ok := ctx.Value(UserContextKey).(*models.User)
+	if !ok || user == nil {
+		panic("no user in context. check if route is missing RequireAuth")
+	}
+	return user
 }
 
 func expiredCookie() *http.Cookie {
