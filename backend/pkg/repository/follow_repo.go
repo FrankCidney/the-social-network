@@ -20,6 +20,7 @@ type FollowRepository interface {
 	GetFollowing(userID string, limit, offset int) ([]*models.User, error)
 	GetFollowerCount(userID string) (int, error)
 	GetFollowingCount(userID string) (int, error)
+	GetPendingRequests(userID string) ([]*models.FollowRequest, error)
 }
 
 type sqliteFollowRepo struct {
@@ -181,6 +182,33 @@ func (r *sqliteFollowRepo) GetFollowerCount(userID string) (int, error) {
  
 func (r *sqliteFollowRepo) GetFollowingCount(userID string) (int, error) {
 	return r.countWhere("followers", "follower_id", userID)
+}
+
+func (r *sqliteFollowRepo) GetPendingRequests(userID string) ([]*models.FollowRequest, error) {
+	const query = `
+		SELECT sender_id, receiver_id, status, created_at
+		FROM follow_requests
+		WHERE receiver_id = ? AND status = 'pending'
+		ORDER BY created_at DESC`
+ 
+	rows, err := r.db.Query(query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get pending requests: %w", err)
+	}
+	defer rows.Close()
+ 
+	var requests []*models.FollowRequest
+	for rows.Next() {
+		fr := &models.FollowRequest{}
+		if err := rows.Scan(&fr.SenderID, &fr.ReceiverID, &fr.Status, &fr.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan follow request: %w", err)
+		}
+		requests = append(requests, fr)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+	return requests, nil
 }
 
 func (r *sqliteFollowRepo) scanUsers(query, userID string, limit, offset int) ([]*models.User, error) {
