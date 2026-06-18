@@ -145,8 +145,8 @@ func isSQLiteUniqueViolation(err error) bool {
 	return strings.Contains(msg, "UNIQUE constraint failed") || strings.Contains(msg, "unique constraint failed")
 }
 
-// requireOneRow returns an error if the statement affected no rows.
-// This is because SQLite treats updating/deleting a row that doesn't exist (0 rows affected) as a success
+// requireOneRow is used to return an error if the statement affected no rows.
+// This is because SQLite treats updating/deleting a row that doesn't exist (i.e., 0 rows affected) as a success
 func requireOneRow(res sql.Result, entity string) error {
 	n, err := res.RowsAffected()
 	if err != nil {

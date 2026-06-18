@@ -85,6 +85,8 @@ func (r *sqliteFollowRepo) AcceptFollowRequest(senderID, targetID string) error 
 		return apperror.NotFound("pending follow request not found")
 	}
  
+	// "IGNORE" is used for idempotency, so as to not throw an error if a user say clicks
+	// "Accept Follow Request" several times in quick succession
 	const insertFollower = `
 		INSERT OR IGNORE INTO followers (follower_id, followed_id, created_at)
 		VALUES (?, ?, datetime('now'))`
@@ -109,6 +111,8 @@ func (r *sqliteFollowRepo) DeclineFollowRequest(senderID, targetID string) error
 }
  
 func (r *sqliteFollowRepo) CreateFollower(followerID, followedID string) error {
+	// "IGNORE" is used for idempotency, so as to not error should a user click follow
+	// multiple times in quick succession
 	const query = `
 		INSERT OR IGNORE INTO followers (follower_id, followed_id, created_at)
 		VALUES (?, ?, datetime('now'))`
@@ -118,4 +122,98 @@ func (r *sqliteFollowRepo) CreateFollower(followerID, followedID string) error {
 		return fmt.Errorf("create follower: %w", err)
 	}
 	return nil
+}
+
+func (r *sqliteFollowRepo) DeleteFollower(followerID, followedID string) error {
+	const query = `DELETE FROM followers WHERE follower_id = ? AND followed_id = ?`
+	res, err := r.db.Exec(query, followerID, followedID)
+	if err != nil {
+		return fmt.Errorf("delete follower: %w", err)
+	}
+	return requireOneRow(res, "follow relationship")
+}
+
+func (r *sqliteFollowRepo) IsFollowing(followerID, followedID string) (bool, error) {
+	const query = `
+		SELECT EXISTS(
+			SELECT 1 FROM followers WHERE follower_id = ? AND followed_id = ?
+		)`
+ 
+	var exists bool
+	err := r.db.QueryRow(query, followerID, followedID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("is following: %w", err)
+	}
+	return exists, nil
+}
+
+func (r *sqliteFollowRepo) GetFollowers(userID string, limit, offset int) ([]*models.User, error) {
+	const query = `
+		SELECT u.id, u.email, u.first_name, u.last_name, u.dob,
+		       COALESCE(u.nickname, ''), COALESCE(u.about_me, ''), COALESCE(u.avatar_path, ''),
+		       u.is_public, u.created_at
+		FROM followers f
+		JOIN users u ON u.id = f.follower_id
+		WHERE f.followed_id = ?
+		ORDER BY f.created_at DESC
+		LIMIT ? OFFSET ?`
+ 
+	return r.scanUsers(query, userID, limit, offset)
+}
+
+func (r *sqliteFollowRepo) GetFollowing(userID string, limit, offset int) ([]*models.User, error) {
+	const query = `
+		SELECT u.id, u.email, u.first_name, u.last_name, u.dob,
+		       COALESCE(u.nickname, ''), COALESCE(u.about_me, ''), COALESCE(u.avatar_path, ''),
+		       u.is_public, u.created_at
+		FROM followers f
+		JOIN users u ON u.id = f.followed_id
+		WHERE f.follower_id = ?
+		ORDER BY f.created_at DESC
+		LIMIT ? OFFSET ?`
+ 
+	return r.scanUsers(query, userID, limit, offset)
+}
+
+func (r *sqliteFollowRepo) GetFollowerCount(userID string) (int, error) {
+	return r.countWhere("followers", "followed_id", userID)
+}
+ 
+func (r *sqliteFollowRepo) GetFollowingCount(userID string) (int, error) {
+	return r.countWhere("followers", "follower_id", userID)
+}
+
+func (r *sqliteFollowRepo) scanUsers(query, userID string, limit, offset int) ([]*models.User, error) {
+	rows, err := r.db.Query(query, userID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("query users: %w", err)
+	}
+	defer rows.Close()
+ 
+	var users []*models.User
+	for rows.Next() {
+		u := &models.User{}
+		var isPublic int
+		if err := rows.Scan(
+			&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.DOB,
+			&u.Nickname, &u.AboutMe, &u.AvatarPath, &isPublic, &u.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan user: %w", err)
+		}
+		u.IsPublic = isPublic == 1
+		users = append(users, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+	return users, nil
+}
+
+func (r *sqliteFollowRepo) countWhere(table, column, value string) (int, error) {
+	query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s = ?", table, column)
+	var count int
+	if err := r.db.QueryRow(query, value).Scan(&count); err != nil {
+		return 0, fmt.Errorf("count %s: %w", table, err)
+	}
+	return count, nil
 }
