@@ -1,23 +1,17 @@
 /** @type {import('tailwindcss').Config} */
-export default {
+module.exports = {
   content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
+    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {
       colors: {
-        canvas: '#F9FAFB',
-        surface: '#FFFFFF',
-        primary: '#4F46E5',
-        'text-main': '#111827',
-        privacy: {
-          public: '#10B981',
-          private: '#EF4444',
-        }
+        primary: "#4f46e5",
       },
       borderRadius: {
-        'bento': '12px',
+        'bento': '1.5rem',
       }
     },
   },
