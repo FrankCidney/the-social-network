@@ -189,6 +189,12 @@ func (s *service) UploadAvatar(userID string, file multipart.File, header *multi
 func (s *service) GetFollowers(userID string, limit, offset int) (*models.FollowListResponse, error) {
 	limit, offset = clampPagination(limit, offset)
  
+	// Verify user exists
+	_, err := s.users.GetUserByID(userID)
+	if err != nil {
+		return nil, err
+	}
+
 	users, err := s.follows.GetFollowers(userID, limit, offset)
 	if err != nil {
 		return nil, err
@@ -209,7 +215,13 @@ func (s *service) GetFollowers(userID string, limit, offset int) (*models.Follow
 
 func (s *service) GetFollowing(userID string, limit, offset int) (*models.FollowListResponse, error) {
 	limit, offset = clampPagination(limit, offset)
- 
+	
+ 	// Verify user exists
+	_, err := s.users.GetUserByID(userID)
+	if err != nil {
+		return nil, err
+	}
+	
 	users, err := s.follows.GetFollowing(userID, limit, offset)
 	if err != nil {
 		return nil, err
