@@ -1,0 +1,3 @@
+-- DOWN
+DROP TABLE IF EXISTS post_visibility;
+DROP TABLE IF EXISTS posts;
