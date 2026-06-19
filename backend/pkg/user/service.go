@@ -17,8 +17,8 @@ type Service interface {
 	UpdateProfile(userID string, req models.UpdateProfileRequest) error
 	SetProfileVisibility(userID string, isPublic bool) error
 	UploadAvatar(userID string, file multipart.File, header *multipart.FileHeader) (string, error)
-	GetFollowers(userID string) ([]*models.User, error)
-	GetFollowing(userID string) ([]*models.User, error)
+	GetFollowers(userID string, limit, offset int) (*models.FollowListResponse, error)
+	GetFollowing(userID string, limit, offset int) (*models.FollowListResponse, error)
 }
 
 const (
@@ -38,9 +38,9 @@ type service struct {
 	follows repository.FollowRepository
 }
 
-// func NewService(users repository.UserRepository, follows repository.FollowRepository) Service {
-// 	return &service{users: users, follows: follows}
-// }
+func NewService(users repository.UserRepository, follows repository.FollowRepository) Service {
+	return &service{users: users, follows: follows}
+}
 
 func (s *service) GetProfile(viewerID, targetID string) (*models.Profile, error) {
 	target, err := s.users.GetUserByID(targetID)
@@ -129,6 +129,10 @@ func (s *service) UpdateProfile(userID string, req models.UpdateProfileRequest) 
 	return nil
 }
 
+func (s *service) SetProfileVisibility(userID string, isPublic bool) error {
+	return s.users.SetProfileVisibility(userID, isPublic)
+}
+
 func (s *service) UploadAvatar(userID string, file multipart.File, header *multipart.FileHeader) (string, error) {
 	if header.Size > maxAvatarSize {
 		return "", apperror.BadInput("avatar must be under 5 MB")
@@ -191,6 +195,27 @@ func (s *service) GetFollowers(userID string, limit, offset int) (*models.Follow
 	}
 
 	total, err := s.follows.GetFollowerCount(userID)
+	if err != nil {
+		return nil, err
+	}
+ 
+	return &models.FollowListResponse{
+		Users:  toPublicUsers(users),
+		Total:  total,
+		Limit:  limit,
+		Offset: offset,
+	}, nil
+}
+
+func (s *service) GetFollowing(userID string, limit, offset int) (*models.FollowListResponse, error) {
+	limit, offset = clampPagination(limit, offset)
+ 
+	users, err := s.follows.GetFollowing(userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	total, err := s.follows.GetFollowingCount(userID)
 	if err != nil {
 		return nil, err
 	}
