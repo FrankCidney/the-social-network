@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"social-network/internal/auth"
+	"social-network/internal/db"
 	"social-network/internal/follow"
 	"social-network/internal/handlers"
 	"social-network/internal/repository"
@@ -20,7 +21,6 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	// TODO: Import db package during integration
 	store, err := db.NewSQLiteStore("./social-network.db", "./internal/db/migrations/sqlite")
 	if err != nil {
 		slog.Error("database initialization failed", "error", err)
@@ -36,9 +36,9 @@ func main() {
 	slog.Info("database ready")
 
 	// Repositories
-	userRepo := repository.NewUserRepository(store.db)
-	sessionRepo := repository.NewSessionRepository(store.db)
-	followRepo := repository.NewFollowRepository(store.db)
+	userRepo := repository.NewUserRepository(store.DB)
+	sessionRepo := repository.NewSessionRepository(store.DB)
+	followRepo := repository.NewFollowRepository(store.DB)
 
 	// Services
 	authService := auth.NewService(userRepo, sessionRepo)
