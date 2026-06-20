@@ -7,12 +7,15 @@ import (
 	"os"
 	"os/signal"
 	"social-network/internal/auth"
+	"social-network/internal/chat"
 	"social-network/internal/db"
 	"social-network/internal/follow"
+	"social-network/internal/groups"
 	"social-network/internal/handlers"
 	"social-network/internal/repository"
 	"social-network/internal/routes"
 	"social-network/internal/user"
+	"social-network/internal/websocket"
 	"syscall"
 	"time"
 )
@@ -39,19 +42,30 @@ func main() {
 	userRepo := repository.NewUserRepository(store.DB)
 	sessionRepo := repository.NewSessionRepository(store.DB)
 	followRepo := repository.NewFollowRepository(store.DB)
+	groupRepo := repository.NewGroupRepository(store.DB)
+	msgRepo := repository.NewMessageRepository(store.DB)
+
+	// WebSockets
+	wsManager := websocket.NewManager()
+	wsNotifier := websocket.NewWSNotifier(wsManager)
+	wsHandler := handlers.NewWebSocketHandler(wsManager)
 
 	// Services
 	authService := auth.NewService(userRepo, sessionRepo)
 	userService := user.NewService(userRepo, followRepo)
-	followService := follow.NewService(userRepo, followRepo, nil) // TODO: Wire in notifier after chats service is done
+	followService := follow.NewService(userRepo, followRepo, wsNotifier)
+	groupService := groups.NewService(groupRepo, wsNotifier)
+	chatService := chat.NewService(msgRepo, groupRepo, followRepo, wsNotifier)
 
 	// Handlers
 	authHandler := handlers.NewAuthHandler(authService)
 	userHandler := handlers.NewUserHandler(userService)
 	followHandler := handlers.NewFollowHandler(followService)
+	groupHandler := handlers.NewGroupHandler(groupService)
+	chatHandler := handlers.NewChatHandler(chatService)
 
 	// Routes
-	mux := routes.NewRouter(authHandler, userHandler, followHandler, authService)
+	mux := routes.NewRouter(authHandler, userHandler, followHandler, wsHandler, groupHandler, chatHandler, authService)
 
 	// Background cleanup
 	ctx, cancel := context.WithCancel(context.Background())

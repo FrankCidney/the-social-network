@@ -11,6 +11,9 @@ func NewRouter(
 	authHandler *handlers.AuthHandler,
 	userHandler *handlers.UserHandler,
 	followHandler *handlers.FollowHandler,
+	wsHandler *handlers.WebSocketHandler,
+	groupHandler *handlers.GroupHandler,
+	chatHandler *handlers.ChatHandler,
 	authService auth.Service,
 ) http.Handler {
 	mux := http.NewServeMux()
@@ -18,6 +21,11 @@ func NewRouter(
 	registerAuthRoutes(mux, authHandler, authService)
 	registerProfileRoutes(mux, userHandler, authService)
 	registerFollowRoutes(mux, followHandler, authService)
+	registerGroupRoutes(mux, groupHandler, authService)
+	registerChatRoutes(mux, chatHandler, authService)
+	
+	mux.Handle("GET /api/ws", middleware.RequireAuth(authService, http.HandlerFunc(wsHandler.ServeWS)))
+	
 	return mux
 }
 
@@ -47,4 +55,20 @@ func registerFollowRoutes(mux *http.ServeMux, h *handlers.FollowHandler, authSer
 	mux.Handle("DELETE /api/follow/{id}", middleware.RequireAuth(authService, http.HandlerFunc(h.Unfollow)))
 	mux.Handle("POST /api/follow/{id}/accept", middleware.RequireAuth(authService, http.HandlerFunc(h.AcceptRequest)))
 	mux.Handle("POST /api/follow/{id}/decline", middleware.RequireAuth(authService, http.HandlerFunc(h.DeclineRequest)))
+}
+
+func registerGroupRoutes(mux *http.ServeMux, h *handlers.GroupHandler, authService auth.Service) {
+	mux.Handle("POST /api/groups", middleware.RequireAuth(authService, http.HandlerFunc(h.CreateGroup)))
+	mux.Handle("GET /api/groups", middleware.RequireAuth(authService, http.HandlerFunc(h.GetGroups)))
+	mux.Handle("GET /api/groups/{id}", middleware.RequireAuth(authService, http.HandlerFunc(h.GetGroup)))
+	mux.Handle("POST /api/groups/{id}/join", middleware.RequireAuth(authService, http.HandlerFunc(h.RequestJoin)))
+	
+	mux.Handle("POST /api/groups/{id}/events", middleware.RequireAuth(authService, http.HandlerFunc(h.CreateEvent)))
+	mux.Handle("GET /api/groups/{id}/events", middleware.RequireAuth(authService, http.HandlerFunc(h.GetEvents)))
+}
+
+func registerChatRoutes(mux *http.ServeMux, h *handlers.ChatHandler, authService auth.Service) {
+	mux.Handle("POST /api/chat/messages", middleware.RequireAuth(authService, http.HandlerFunc(h.SendMessage)))
+	mux.Handle("GET /api/chat/messages/{userId}", middleware.RequireAuth(authService, http.HandlerFunc(h.GetPrivateMessages)))
+	mux.Handle("GET /api/groups/{id}/messages", middleware.RequireAuth(authService, http.HandlerFunc(h.GetGroupMessages)))
 }
