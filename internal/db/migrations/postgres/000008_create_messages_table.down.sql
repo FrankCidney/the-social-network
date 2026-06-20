@@ -1,2 +1,0 @@
--- DOWN
-DROP TABLE IF EXISTS messages;

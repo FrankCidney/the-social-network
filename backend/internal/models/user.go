@@ -17,7 +17,7 @@ type User struct {
 
 type Session struct {
 	Token     string `json:"token"`
-	UserID    string `jsong:"user_id"`
+	UserID    string `json:"user_id"`
 	CreatedAt string `json:"created_at"`
 	ExpiresAt string `json:"expires_at"`
 }
