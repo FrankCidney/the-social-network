@@ -6,8 +6,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"social-network/pkg/apperror"
-	"social-network/pkg/models"
+	"social-network/internal/apperror"
+	"social-network/internal/models"
 )
 
 // JSON writes v as a JSON body, with the given status code

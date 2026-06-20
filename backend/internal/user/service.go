@@ -5,9 +5,9 @@ import (
 	"mime/multipart"
 	"os"
 	"path/filepath"
-	"social-network/pkg/apperror"
-	"social-network/pkg/models"
-	"social-network/pkg/repository"
+	"social-network/internal/apperror"
+	"social-network/internal/models"
+	"social-network/internal/repository"
 	"strings"
 	"time"
 )

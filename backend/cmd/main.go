@@ -6,12 +6,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"social-network/pkg/auth"
-	"social-network/pkg/follow"
-	"social-network/pkg/handlers"
-	"social-network/pkg/repository"
-	"social-network/pkg/routes"
-	"social-network/pkg/user"
+	"social-network/internal/auth"
+	"social-network/internal/follow"
+	"social-network/internal/handlers"
+	"social-network/internal/repository"
+	"social-network/internal/routes"
+	"social-network/internal/user"
 	"syscall"
 	"time"
 )
@@ -20,6 +20,7 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
+	// TODO: Import db package during integration
 	store, err := db.NewSQLiteStore("./social-network.db", "./internal/db/migrations/sqlite")
 	if err != nil {
 		slog.Error("database initialization failed", "error", err)

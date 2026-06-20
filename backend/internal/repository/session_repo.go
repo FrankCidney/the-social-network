@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"social-network/pkg/apperror"
-	"social-network/pkg/models"
+	"social-network/internal/apperror"
+	"social-network/internal/models"
 )
 
 type SessionRepository interface {

@@ -2,9 +2,9 @@ package routes
 
 import (
 	"net/http"
-	"social-network/pkg/auth"
-	"social-network/pkg/handlers"
-	"social-network/pkg/middleware"
+	"social-network/internal/auth"
+	"social-network/internal/handlers"
+	"social-network/internal/middleware"
 )
 
 func NewRouter(

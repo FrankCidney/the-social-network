@@ -3,11 +3,11 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"social-network/pkg/apperror"
-	"social-network/pkg/middleware"
-	"social-network/pkg/models"
-	"social-network/pkg/response"
-	"social-network/pkg/user"
+	"social-network/internal/apperror"
+	"social-network/internal/middleware"
+	"social-network/internal/models"
+	"social-network/internal/response"
+	"social-network/internal/user"
 	"strconv"
 )
 

@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"social-network/pkg/apperror"
-	"social-network/pkg/auth"
-	"social-network/pkg/models"
-	"social-network/pkg/response"
+	"social-network/internal/apperror"
+	"social-network/internal/auth"
+	"social-network/internal/models"
+	"social-network/internal/response"
 )
 
 type contextKey string

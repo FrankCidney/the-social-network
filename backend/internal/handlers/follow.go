@@ -2,10 +2,10 @@ package handlers
 
 import (
 	"net/http"
-	"social-network/pkg/follow"
-	"social-network/pkg/middleware"
-	"social-network/pkg/models"
-	"social-network/pkg/response"
+	"social-network/internal/follow"
+	"social-network/internal/middleware"
+	"social-network/internal/models"
+	"social-network/internal/response"
 )
 
 type FollowHandler struct {
