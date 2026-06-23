@@ -3,6 +3,8 @@
 import React from 'react';
 import Link from 'next/link';
 import { Home, Users, MessageSquare, Bell, User, LogOut, Search } from 'lucide-react';
+import { WebSocketProvider } from '@/contexts/WebSocketContext';
+import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
 
 export default function MainLayout({
   children,
@@ -10,8 +12,9 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Navigation Bar */}
+    <WebSocketProvider>
+      <div className="min-h-screen bg-gray-50">
+        {/* Navigation Bar */}
       <nav className="sticky top-0 z-50 bg-white border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-8">
@@ -27,10 +30,7 @@ export default function MainLayout({
           </div>
           
           <div className="flex items-center gap-2">
-            <button className="p-2 rounded-full hover:bg-gray-100 relative">
-              <Bell className="w-5 h-5 text-gray-600" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
+            <NotificationDropdown />
             <Link href="/profile" className="flex items-center gap-2 p-1 pl-3 rounded-full hover:bg-gray-100 transition-colors">
               <span className="text-sm font-medium hidden sm:inline">My Profile</span>
               <div className="w-8 h-8 rounded-full bg-indigo-100" />
@@ -77,7 +77,7 @@ export default function MainLayout({
           </div>
         </aside>
       </div>
-    </div>
+    </WebSocketProvider>
   );
 }
 
