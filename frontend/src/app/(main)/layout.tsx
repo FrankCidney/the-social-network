@@ -2,6 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Home, Users, MessageSquare, Bell, User, LogOut, Search } from 'lucide-react';
 
 export default function MainLayout({
@@ -9,6 +10,8 @@ export default function MainLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navigation Bar */}
@@ -42,11 +45,11 @@ export default function MainLayout({
       <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-12 gap-6">
         {/* Sidebar */}
         <aside className="hidden md:block md:col-span-3 space-y-2">
-          <SidebarItem icon={<Home className="w-5 h-5" />} label="Home Feed" href="/feed" active />
-          <SidebarItem icon={<Users className="w-5 h-5" />} label="Groups" href="/groups" />
-          <SidebarItem icon={<MessageSquare className="w-5 h-5" />} label="Messages" href="/messages" />
-          <SidebarItem icon={<Bell className="w-5 h-5" />} label="Notifications" href="/notifications" />
-          <SidebarItem icon={<User className="w-5 h-5" />} label="Profile" href="/profile" />
+          <SidebarItem icon={<Home className="w-5 h-5" />} label="Home Feed" href="/feed" active={pathname === '/feed'} />
+          <SidebarItem icon={<Users className="w-5 h-5" />} label="Groups" href="/groups" active={pathname === '/groups'} />
+          <SidebarItem icon={<MessageSquare className="w-5 h-5" />} label="Messages" href="/messages" active={pathname === '/messages'} />
+          <SidebarItem icon={<Bell className="w-5 h-5" />} label="Notifications" href="/notifications" active={pathname === '/notifications'} />
+          <SidebarItem icon={<User className="w-5 h-5" />} label="Profile" href="/profile" active={pathname === '/profile'} />
           <hr className="my-4 border-gray-100" />
           <SidebarItem icon={<LogOut className="w-5 h-5" />} label="Logout" href="/login" />
         </aside>
