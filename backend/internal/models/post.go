@@ -18,12 +18,8 @@ type Post struct {
 	ImageURL  string    `json:"image_url,omitempty"`
 	Privacy   string    `json:"privacy"` // public, almost_private, private, group
 	CreatedAt time.Time `json:"created_at"`
-	// TODO:
-	// Author    *User     `json:"author,omitempty"`
 }
 
-// Comment is self-referential via ParentCommentID to support arbitrarily
-// deep replies (adjacency list model). A nil ParentCommentID means top-level.
 // Visibility is NOT stored here. A comment's visibility is always whatever
 // its parent post's visibility is.
 type Comment struct {
@@ -34,8 +30,6 @@ type Comment struct {
 	ImageURL  string    `json:"image_url"`
 	ParentCommentID *string `json:"parent_comment_id,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
-	// TODO:
-	// Author    *User     `json:"author,omitempty"`
 }
 
 type CreatePostRequest struct {
