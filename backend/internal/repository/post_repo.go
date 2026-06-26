@@ -147,6 +147,143 @@ func (r *sqlitePostRepo) IsViewerAllowed(postID, viewerID string) (bool, error) 
 	return exists, nil
 }
 
+func (r *sqlitePostRepo) GetFeedForUser(viewerID string, limit, offset int) ([]*models.Post, error) {
+	const query = `
+		SELECT p.id, p.user_id, p.group_id, COALESCE(p.content, ''), COALESCE(p.image_url, ''), p.privacy, p.created_at
+		FROM posts p
+		WHERE
+			p.user_id = ?
+			OR p.privacy = 'public'
+			OR (
+				p.privacy = 'almost_private'
+				AND EXISTS (
+					SELECT 1 FROM followers f
+					WHERE f.follower_id = ? AND f.followed_id = p.user_id
+				)
+			)
+			OR (
+				p.privacy = 'private'
+				AND EXISTS (
+					SELECT 1 FROM post_visibility pv
+					WHERE pv.post_id = p.id AND pv.user_id = ?
+				)
+			)
+			OR (
+				p.privacy = 'group'
+				AND EXISTS (
+					SELECT 1 FROM group_members gm
+					WHERE gm.group_id = p.group_id AND gm.user_id = ? AND gm.status = 'accepted'
+				)
+			)
+		ORDER BY p.created_at DESC
+		LIMIT ? OFFSET ?`
+ 
+	return r.scanPosts(query, viewerID, viewerID, viewerID, viewerID, limit, offset)
+}
+
+func (r *sqlitePostRepo) GetFeedCountForUser(viewerID string) (int, error) {
+	const query = `
+		SELECT COUNT(*)
+		FROM posts p
+		WHERE
+			p.user_id = ?
+			OR p.privacy = 'public'
+			OR (
+				p.privacy = 'almost_private'
+				AND EXISTS (
+					SELECT 1 FROM followers f
+					WHERE f.follower_id = ? AND f.followed_id = p.user_id
+				)
+			)
+			OR (
+				p.privacy = 'private'
+				AND EXISTS (
+					SELECT 1 FROM post_visibility pv
+					WHERE pv.post_id = p.id AND pv.user_id = ?
+				)
+			)
+			OR (
+				p.privacy = 'group'
+				AND EXISTS (
+					SELECT 1 FROM group_members gm
+					WHERE gm.group_id = p.group_id AND gm.user_id = ? AND gm.status = 'accepted'
+				)
+			)`
+ 
+	var count int
+	if err := r.db.QueryRow(query, viewerID, viewerID, viewerID, viewerID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("get feed count: %w", err)
+	}
+	return count, nil
+}
+
+func (r *sqlitePostRepo) GetPostsByAuthor(viewerID, authorID string, limit, offset int) ([]*models.Post, error) {
+	const query = `
+		SELECT p.id, p.user_id, p.group_id, COALESCE(p.content, ''), COALESCE(p.image_url, ''), p.privacy, p.created_at
+		FROM posts p
+		WHERE
+			p.user_id = ?
+			AND (
+				p.user_id = ?
+				OR p.privacy = 'public'
+				OR (
+					p.privacy = 'almost_private'
+					AND EXISTS (
+						SELECT 1 FROM followers f
+						WHERE f.follower_id = ? AND f.followed_id = p.user_id
+					)
+				)
+				OR (
+					p.privacy = 'private'
+					AND EXISTS (
+						SELECT 1 FROM post_visibility pv
+						WHERE pv.post_id = p.id AND pv.user_id = ?
+					)
+				)
+				OR (
+					p.privacy = 'group'
+					AND EXISTS (
+						SELECT 1 FROM group_members gm
+						WHERE gm.group_id = p.group_id AND gm.user_id = ? AND gm.status = 'accepted'
+					)
+				)
+			)
+		ORDER BY p.created_at DESC
+		LIMIT ? OFFSET ?`
+ 
+	return r.scanPosts(query, authorID, viewerID, viewerID, viewerID, viewerID, limit, offset)
+}
+
+func (r *sqlitePostRepo) GetPostCountByAuthor(authorID string) (int, error) {
+	const query = `SELECT COUNT(*) FROM posts WHERE user_id = ?`
+	var count int
+	if err := r.db.QueryRow(query, authorID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("get post count by author: %w", err)
+	}
+	return count, nil
+}
+
+// TODO: Ensure post.Service checks group membership before calling this
+func (r *sqlitePostRepo) GetPostsForGroup(groupID string, limit, offset int) ([]*models.Post, error) {
+	const query = `
+		SELECT id, user_id, group_id, COALESCE(content, ''), COALESCE(image_url, ''), privacy, created_at
+		FROM posts
+		WHERE group_id = ?
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?`
+ 
+	return r.scanPosts(query, groupID, limit, offset)
+}
+
+func (r *sqlitePostRepo) GetPostCountForGroup(groupID string) (int, error) {
+	const query = `SELECT COUNT(*) FROM posts WHERE group_id = ?`
+	var count int
+	if err := r.db.QueryRow(query, groupID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("get post count for group: %w", err)
+	}
+	return count, nil
+}
+
 func (r *sqlitePostRepo) scanPosts(query string, args ...any) ([]*models.Post, error) {
 	rows, err := r.db.Query(query, args...)
 	if err != nil {
