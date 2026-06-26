@@ -31,9 +31,9 @@ type sqlitePostRepo struct {
 	db *sql.DB
 }
 
-// func NewPostRepository(db *sql.DB) PostRepository {
-// 	return &sqlitePostRepo{db: db}
-// }
+func NewPostRepository(db *sql.DB) PostRepository {
+	return &sqlitePostRepo{db: db}
+}
 
 func (r *sqlitePostRepo) CreatePost(p *models.Post) error {
 	const query = `
