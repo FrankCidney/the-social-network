@@ -69,3 +69,33 @@ func (r *sqliteCommentRepo) DeleteComment(id string) error {
 	}
 	return requireOneRow(res, "comment")
 }
+
+func (r *sqliteCommentRepo) GetCommentsForPost(postID string) ([]*models.Comment, error) {
+	const query = `
+		SELECT id, post_id, user_id, content, COALESCE(image_url, ''), parent_comment_id, created_at
+		FROM comments
+		WHERE post_id = ?
+		ORDER BY created_at ASC`
+ 
+	rows, err := r.db.Query(query, postID)
+	if err != nil {
+		return nil, fmt.Errorf("get comments for post: %w", err)
+	}
+	defer rows.Close()
+ 
+	var comments []*models.Comment
+	for rows.Next() {
+		c := &models.Comment{}
+		if err := rows.Scan(
+			&c.ID, &c.PostID, &c.UserID, &c.Content, &c.ImageURL, &c.ParentCommentID, &c.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan comment: %w", err)
+		}
+		comments = append(comments, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+	
+	return comments, nil
+}
