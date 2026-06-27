@@ -15,6 +15,17 @@ type User struct {
 	CreatedAt  string `json:"created_at"`
 }
 
+func (u *User) ToPublic() *PublicUser {
+	return &PublicUser{
+		ID:         u.ID,
+		FirstName:  u.FirstName,
+		LastName:   u.LastName,
+		Nickname:   u.Nickname,
+		AvatarPath: u.AvatarPath,
+		IsPublic:   u.IsPublic,
+	}
+}
+
 type Session struct {
 	Token     string `json:"token"`
 	UserID    string `json:"user_id"`

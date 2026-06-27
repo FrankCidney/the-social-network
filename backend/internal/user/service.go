@@ -8,6 +8,7 @@ import (
 	"social-network/internal/apperror"
 	"social-network/internal/models"
 	"social-network/internal/repository"
+	"social-network/internal/shared/mediavalidate"
 	"strings"
 	"time"
 )
@@ -22,16 +23,8 @@ type Service interface {
 }
 
 const (
-	maxAvatarSize   = 5 << 20 // 5 MB
 	avatarUploadDir = "uploads/avatars"
 )
-
-var allowedAvatarExts = map[string]bool{
-	".jpg":  true,
-	".jpeg": true,
-	".png":  true,
-	".gif":  true,
-}
 
 type service struct {
 	users   repository.UserRepository
@@ -58,7 +51,7 @@ func (s *service) GetProfile(viewerID, targetID string) (*models.Profile, error)
 	}
  
 	profile := &models.Profile{
-		User:           toPublicUser(target),
+		User:           target.ToPublic(),
 		FollowerCount:  followerCount,
 		FollowingCount: followingCount,
 	}
@@ -136,12 +129,12 @@ func (s *service) SetProfileVisibility(userID string, isPublic bool) error {
 // Avatar upload happens outside of user registration and profile update.
 // It has it's own independent endpoint.
 func (s *service) UploadAvatar(userID string, file multipart.File, header *multipart.FileHeader) (string, error) {
-	if header.Size > maxAvatarSize {
+	if header.Size > mediavalidate.MaxImageSize {
 		return "", apperror.BadInput("avatar must be under 5 MB")
 	}
  
 	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if !allowedAvatarExts[ext] {
+	if !mediavalidate.AllowedImageExts[ext] {
 		return "", apperror.BadInput("avatar must be a JPEG, PNG, or GIF")
 	}
  
@@ -151,7 +144,7 @@ func (s *service) UploadAvatar(userID string, file multipart.File, header *multi
 		return "", apperror.Internal("could not read file")
 	}
 
-	if !isAllowedImageBytes(buf[:n]) {
+	if !mediavalidate.IsAllowedImageBytes(buf[:n]) {
 		return "", apperror.BadInput("avatar must be a JPEG, PNG, or GIF")
 
 	}
@@ -254,52 +247,10 @@ func clampPagination(limit, offset int) (int, int) {
 	return limit, offset
 }
 
-func toPublicUser(u *models.User) *models.PublicUser {
-	return &models.PublicUser{
-		ID:         u.ID,
-		FirstName:  u.FirstName,
-		LastName:   u.LastName,
-		Nickname:   u.Nickname,
-		AvatarPath: u.AvatarPath,
-		IsPublic:   u.IsPublic,
-	}
-}
-
 func toPublicUsers(users []*models.User) []*models.PublicUser {
 	out := make([]*models.PublicUser, len(users))
 	for i, u := range users {
-		out[i] = toPublicUser(u)
+		out[i] = u.ToPublic()
 	}
 	return out
-}
-
-// isAllowedImageBytes checks magic bytes for JPEG, PNG, and GIF.
-// We do this independently of the filename extension as a second layer of
-// validation. A renamed .exe for example, uploaded as .jpg, should be rejected.
-func isAllowedImageBytes(b []byte) bool {
-	// If the file is fewer than 4 bytes, it can't be a valid JPEG, PNG or GIF
-	if len(b) < 4 {
-		return false
-	}
-
-	// Every JPEG begins with the hex sequence FF D8 FF
-	if b[0] == 0xFF && b[1] == 0xD8 && b[2] == 0xFF {
-		return true
-	}
-
-	// Every PNG begins with the hex sequence 89 50 4E 47 0D 0A 1A 0A
-	if len(b) >= 8 &&
-		b[0] == 0x89 && b[1] == 0x50 && b[2] == 0x4E && b[3] == 0x47 &&
-		b[4] == 0x0D && b[5] == 0x0A && b[6] == 0x1A && b[7] == 0x0A {
-		return true
-	}
-
-	// Every GIF starts with the text GIF87a or GIF89a
-	if len(b) >= 6 &&
-		b[0] == 'G' && b[1] == 'I' && b[2] == 'F' && b[3] == '8' &&
-		(b[4] == '7' || b[4] == '9') && b[5] == 'a' {
-		return true
-	}
-
-	return false
 }
