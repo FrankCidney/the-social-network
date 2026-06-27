@@ -263,7 +263,6 @@ func (r *sqlitePostRepo) GetPostCountByAuthor(authorID string) (int, error) {
 	return count, nil
 }
 
-// TODO: Ensure post.Service checks group membership before calling this
 func (r *sqlitePostRepo) GetPostsForGroup(groupID string, limit, offset int) ([]*models.Post, error) {
 	const query = `
 		SELECT id, user_id, group_id, COALESCE(content, ''), COALESCE(image_url, ''), privacy, created_at

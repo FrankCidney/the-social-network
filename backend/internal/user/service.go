@@ -9,6 +9,7 @@ import (
 	"social-network/internal/models"
 	"social-network/internal/repository"
 	"social-network/internal/shared/mediavalidate"
+	"social-network/internal/shared/paginate"
 	"strings"
 	"time"
 )
@@ -182,7 +183,7 @@ func (s *service) UploadAvatar(userID string, file multipart.File, header *multi
 }
 
 func (s *service) GetFollowers(userID string, limit, offset int) (*models.FollowListResponse, error) {
-	limit, offset = clampPagination(limit, offset)
+	limit, offset = paginate.ClampPagination(limit, offset)
  
 	// Verify user exists
 	_, err := s.users.GetUserByID(userID)
@@ -209,7 +210,7 @@ func (s *service) GetFollowers(userID string, limit, offset int) (*models.Follow
 }
 
 func (s *service) GetFollowing(userID string, limit, offset int) (*models.FollowListResponse, error) {
-	limit, offset = clampPagination(limit, offset)
+	limit, offset = paginate.ClampPagination(limit, offset)
 	
  	// Verify user exists
 	_, err := s.users.GetUserByID(userID)
@@ -233,18 +234,6 @@ func (s *service) GetFollowing(userID string, limit, offset int) (*models.Follow
 		Limit:  limit,
 		Offset: offset,
 	}, nil
-}
-
-func clampPagination(limit, offset int) (int, int) {
-	if limit <= 0 || limit > 100 {
-		limit = 20
-	}
-
-	if offset < 0 {
-		offset = 0
-	}
-
-	return limit, offset
 }
 
 func toPublicUsers(users []*models.User) []*models.PublicUser {

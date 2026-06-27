@@ -8,6 +8,8 @@ import (
 	"social-network/internal/apperror"
 	"social-network/internal/models"
 	"social-network/internal/repository"
+	"social-network/internal/shared/mediavalidate"
+	"social-network/internal/shared/paginate"
 	"strings"
 	"time"
 
@@ -185,11 +187,11 @@ func (s *service) UploadPostImage(authorID, postID string, file multipart.File, 
 		return "", apperror.NotFound("post not found")
 	}
  
-	if header.Size > maxImageSize {
+	if header.Size > mediavalidate.MaxImageSize {
 		return "", apperror.BadInput("image must be under 5 MB")
 	}
 	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if !allowedImageExts[ext] {
+	if !mediavalidate.AllowedImageExts[ext] {
 		return "", apperror.BadInput("image must be a JPEG, PNG, or GIF")
 	}
  
@@ -198,7 +200,7 @@ func (s *service) UploadPostImage(authorID, postID string, file multipart.File, 
 	if err != nil {
 		return "", apperror.Internal("could not read file")
 	}
-	if !isAllowedImageBytes(buf[:n]) {
+	if !mediavalidate.IsAllowedImageBytes(buf[:n]) {
 		return "", apperror.BadInput("image must be a JPEG, PNG, or GIF")
 	}
 	if _, err := file.Seek(0, 0); err != nil {
@@ -232,6 +234,83 @@ func (s *service) UploadPostImage(authorID, postID string, file multipart.File, 
 	return destPath, nil
 }
 
+func (s *service) GetFeed(viewerID string, limit, offset int) (*models.PostListResponse, error) {
+	limit, offset = paginate.ClampPagination(limit, offset)
+ 
+	posts, err := s.posts.GetFeedForUser(viewerID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	total, err := s.posts.GetFeedCountForUser(viewerID)
+	if err != nil {
+		return nil, err
+	}
+ 
+	responses, err := s.attachAuthors(posts)
+	if err != nil {
+		return nil, err
+	}
+ 
+	return &models.PostListResponse{Posts: responses, Total: total, Limit: limit, Offset: offset}, nil
+}
+
+func (s *service) GetPostsByAuthor(viewerID, authorID string, limit, offset int) (*models.PostListResponse, error) {
+	limit, offset = paginate.ClampPagination(limit, offset)
+ 
+	posts, err := s.posts.GetPostsByAuthor(viewerID, authorID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	total, err := s.posts.GetPostCountByAuthor(authorID)
+	if err != nil {
+		return nil, err
+	}
+ 
+	responses, err := s.attachAuthors(posts)
+	if err != nil {
+		return nil, err
+	}
+ 
+	return &models.PostListResponse{Posts: responses, Total: total, Limit: limit, Offset: offset}, nil
+}
+
+func (s *service) GetGroupPosts(viewerID, groupID string, limit, offset int) (*models.PostListResponse, error) {
+	member, err := s.isGroupMember(viewerID, groupID)
+	if err != nil {
+		return nil, err
+	}
+	if !member {
+		return nil, apperror.Forbidden("you must be a member of this group to view its posts")
+	}
+ 
+	limit, offset = paginate.ClampPagination(limit, offset)
+ 
+	posts, err := s.posts.GetPostsForGroup(groupID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	total, err := s.posts.GetPostCountForGroup(groupID)
+	if err != nil {
+		return nil, err
+	}
+ 
+	responses, err := s.attachAuthors(posts)
+	if err != nil {
+		return nil, err
+	}
+ 
+	return &models.PostListResponse{Posts: responses, Total: total, Limit: limit, Offset: offset}, nil
+}
+
+func (s *service) CanViewPost(viewerID, postID string) (bool, error) {
+	p, err := s.posts.GetPostByID(postID)
+	if err != nil {
+		return false, err
+	}
+
+	return s.canView(viewerID, p)
+}
+
 func (s *service) canView(viewerID string, p *models.Post) (bool, error) {
 	if viewerID == p.UserID {
 		return true, nil
@@ -245,6 +324,7 @@ func (s *service) canView(viewerID string, p *models.Post) (bool, error) {
 		return s.posts.IsViewerAllowed(p.ID, viewerID)
 	case models.PrivacyGroup:
 		if p.GroupID == nil {
+			// Group ID must exist for privacy "group"
 			return false, nil
 		}
 		return s.isGroupMember(viewerID, *p.GroupID)
@@ -322,25 +402,36 @@ func (s *service) validateViewersAreFollowers(authorID string, viewerIDs []strin
 	return nil
 }
 
+func (s *service) attachAuthors(posts []*models.Post) ([]*models.PostResponse, error) {
+	out := make([]*models.PostResponse, 0, len(posts))
+	// Cache lookups within a single page. A feed page can easily contain
+	// several posts from the same author.
+	cache := make(map[string]*models.User)
+ 
+	for _, p := range posts {
+		author, ok := cache[p.UserID]
+		if !ok {
+			var err error
+			author, err = s.users.GetUserByID(p.UserID)
+			if err != nil {
+				return nil, err
+			}
+			cache[p.UserID] = author
+		}
+		out = append(out, toPostResponse(p, author))
+	}
+
+	return out, nil
+}
+
 func toPostResponse(p *models.Post, author *models.User) *models.PostResponse {
 	return &models.PostResponse{
 		ID:        p.ID,
-		Author:    toPublicUser(author),
+		Author:    author.ToPublic(),
 		GroupID:   p.GroupID,
 		Content:   p.Content,
 		ImageURL:  p.ImageURL,
 		Privacy:   p.Privacy,
 		CreatedAt: p.CreatedAt,
-	}
-}
-
-func toPublicUser(u *models.User) *models.PublicUser {
-	return &models.PublicUser{
-		ID:         u.ID,
-		FirstName:  u.FirstName,
-		LastName:   u.LastName,
-		Nickname:   u.Nickname,
-		AvatarPath: u.AvatarPath,
-		IsPublic:   u.IsPublic,
 	}
 }
