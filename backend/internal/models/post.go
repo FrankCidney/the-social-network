@@ -17,7 +17,7 @@ type Post struct {
 	Content   string    `json:"content,omitempty"`
 	ImageURL  string    `json:"image_url,omitempty"`
 	Privacy   string    `json:"privacy"` // public, almost_private, private, group
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt string `json:"created_at"`
 }
 
 // Visibility is NOT stored here. A comment's visibility is always whatever

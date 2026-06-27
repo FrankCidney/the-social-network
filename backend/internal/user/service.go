@@ -133,6 +133,8 @@ func (s *service) SetProfileVisibility(userID string, isPublic bool) error {
 	return s.users.SetProfileVisibility(userID, isPublic)
 }
 
+// Avatar upload happens outside of user registration and profile update.
+// It has it's own independent endpoint.
 func (s *service) UploadAvatar(userID string, file multipart.File, header *multipart.FileHeader) (string, error) {
 	if header.Size > maxAvatarSize {
 		return "", apperror.BadInput("avatar must be under 5 MB")
