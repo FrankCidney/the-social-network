@@ -20,6 +20,10 @@ type sqliteCommentRepo struct {
 	db *sql.DB
 }
 
+func NewCommentRepository(db *sql.DB) CommentRepository {
+	return &sqliteCommentRepo{db: db}
+}
+
 func (r *sqliteCommentRepo) CreateComment(c *models.Comment) error {
 	const query = `
 		INSERT INTO comments (id, post_id, user_id, content, image_url, parent_comment_id, created_at)

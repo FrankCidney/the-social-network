@@ -13,16 +13,16 @@ type PostRepository interface {
 	GetPostByID(id string) (*models.Post, error)
 	UpdatePost(p *models.Post) error
 	DeletePost(id string) error
- 
+
 	SetPrivateViewers(postID string, userIDs []string) error
 	IsViewerAllowed(postID, viewerID string) (bool, error)
- 
+
 	GetFeedForUser(viewerID string, limit, offset int) ([]*models.Post, error)
 	GetFeedCountForUser(viewerID string) (int, error)
- 
+
 	GetPostsByAuthor(viewerID, authorID string, limit, offset int) ([]*models.Post, error)
 	GetPostCountByAuthor(authorID string) (int, error)
- 
+
 	GetPostsForGroup(groupID string, limit, offset int) ([]*models.Post, error)
 	GetPostCountForGroup(groupID string) (int, error)
 }
@@ -39,7 +39,7 @@ func (r *sqlitePostRepo) CreatePost(p *models.Post) error {
 	const query = `
 		INSERT INTO posts (id, user_id, group_id, content, image_url, privacy, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`
- 
+
 	_, err := r.db.Exec(query,
 		p.ID, p.UserID, p.GroupID, nullableString(p.Content), nullableString(p.ImageURL), p.Privacy, p.CreatedAt,
 	)
@@ -53,7 +53,7 @@ func (r *sqlitePostRepo) GetPostByID(id string) (*models.Post, error) {
 	const query = `
 		SELECT id, user_id, group_id, COALESCE(content, ''), COALESCE(image_url, ''), privacy, created_at
 		FROM posts WHERE id = ?`
- 
+
 	p := &models.Post{}
 	err := r.db.QueryRow(query, id).Scan(
 		&p.ID, &p.UserID, &p.GroupID, &p.Content, &p.ImageURL, &p.Privacy, &p.CreatedAt,
@@ -71,7 +71,7 @@ func (r *sqlitePostRepo) UpdatePost(p *models.Post) error {
 	const query = `
 		UPDATE posts SET content = ?, image_url = ?, privacy = ?, group_id = ?
 		WHERE id = ?`
- 
+
 	res, err := r.db.Exec(query, nullableString(p.Content), nullableString(p.ImageURL), p.Privacy, p.GroupID, p.ID)
 	if err != nil {
 		return fmt.Errorf("update post: %w", err)
@@ -87,7 +87,7 @@ func (r *sqlitePostRepo) DeletePost(id string) error {
 	}
 	defer tx.Rollback()
 
-	// We clean up related data ourselves because SQLite won’t always 
+	// We clean up related data ourselves because SQLite won’t always
 	// do it automatically unless foreign key support is explicitly enabled.
 	if _, err := tx.Exec(`DELETE FROM post_visibility WHERE post_id = ?`, id); err != nil {
 		return fmt.Errorf("delete post visibility: %w", err)
@@ -95,7 +95,7 @@ func (r *sqlitePostRepo) DeletePost(id string) error {
 	if _, err := tx.Exec(`DELETE FROM comments WHERE post_id = ?`, id); err != nil {
 		return fmt.Errorf("delete post comments: %w", err)
 	}
- 
+
 	res, err := tx.Exec(`DELETE FROM posts WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("delete post: %w", err)
@@ -104,11 +104,11 @@ func (r *sqlitePostRepo) DeletePost(id string) error {
 	if err != nil {
 		return fmt.Errorf("rows affected: %w", err)
 	}
-	
+
 	if n == 0 {
 		return apperror.NotFound("post not found")
 	}
- 
+
 	return tx.Commit()
 }
 
@@ -118,18 +118,18 @@ func (r *sqlitePostRepo) SetPrivateViewers(postID string, userIDs []string) erro
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback()
- 
+
 	if _, err := tx.Exec(`DELETE FROM post_visibility WHERE post_id = ?`, postID); err != nil {
 		return fmt.Errorf("clear post visibility: %w", err)
 	}
- 
+
 	const insert = `INSERT INTO post_visibility (post_id, user_id) VALUES (?, ?)`
 	for _, uid := range userIDs {
 		if _, err := tx.Exec(insert, postID, uid); err != nil {
 			return fmt.Errorf("insert post visibility: %w", err)
 		}
 	}
- 
+
 	return tx.Commit()
 }
 
@@ -138,7 +138,7 @@ func (r *sqlitePostRepo) IsViewerAllowed(postID, viewerID string) (bool, error) 
 		SELECT EXISTS(
 			SELECT 1 FROM post_visibility WHERE post_id = ? AND user_id = ?
 		)`
- 
+
 	var exists bool
 	if err := r.db.QueryRow(query, postID, viewerID).Scan(&exists); err != nil {
 		return false, fmt.Errorf("is viewer allowed: %w", err)
@@ -177,7 +177,7 @@ func (r *sqlitePostRepo) GetFeedForUser(viewerID string, limit, offset int) ([]*
 			)
 		ORDER BY p.created_at DESC
 		LIMIT ? OFFSET ?`
- 
+
 	return r.scanPosts(query, viewerID, viewerID, viewerID, viewerID, limit, offset)
 }
 
@@ -209,7 +209,7 @@ func (r *sqlitePostRepo) GetFeedCountForUser(viewerID string) (int, error) {
 					WHERE gm.group_id = p.group_id AND gm.user_id = ? AND gm.status = 'accepted'
 				)
 			)`
- 
+
 	var count int
 	if err := r.db.QueryRow(query, viewerID, viewerID, viewerID, viewerID).Scan(&count); err != nil {
 		return 0, fmt.Errorf("get feed count: %w", err)
@@ -250,7 +250,7 @@ func (r *sqlitePostRepo) GetPostsByAuthor(viewerID, authorID string, limit, offs
 			)
 		ORDER BY p.created_at DESC
 		LIMIT ? OFFSET ?`
- 
+
 	return r.scanPosts(query, authorID, viewerID, viewerID, viewerID, viewerID, limit, offset)
 }
 
@@ -271,7 +271,7 @@ func (r *sqlitePostRepo) GetPostsForGroup(groupID string, limit, offset int) ([]
 		WHERE group_id = ?
 		ORDER BY created_at DESC
 		LIMIT ? OFFSET ?`
- 
+
 	return r.scanPosts(query, groupID, limit, offset)
 }
 
@@ -290,7 +290,7 @@ func (r *sqlitePostRepo) scanPosts(query string, args ...any) ([]*models.Post, e
 		return nil, fmt.Errorf("query posts: %w", err)
 	}
 	defer rows.Close()
- 
+
 	var posts []*models.Post
 	for rows.Next() {
 		p := &models.Post{}
