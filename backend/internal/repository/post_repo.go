@@ -305,9 +305,3 @@ func (r *sqlitePostRepo) scanPosts(query string, args ...any) ([]*models.Post, e
 	return posts, nil
 }
 
-func nullableString(s string) any {
-	if s == "" {
-		return nil
-	}
-	return s
-}
