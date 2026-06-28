@@ -1,7 +1,5 @@
 package models
 
-import "time"
-
 const (
 	PrivacyPublic        = "public"
 	PrivacyAlmostPrivate = "almost_private"
@@ -20,8 +18,7 @@ type Post struct {
 	CreatedAt string `json:"created_at"`
 }
 
-// Visibility is NOT stored here. A comment's visibility is always whatever
-// its parent post's visibility is.
+// Visibility is NOT stored here. A comment's visibility is always whatever its parent post's visibility is.
 type Comment struct {
 	ID        string    `json:"id"`
 	PostID    string    `json:"post_id"`
@@ -29,7 +26,7 @@ type Comment struct {
 	Content   string    `json:"content"`
 	ImageURL  string    `json:"image_url"`
 	ParentCommentID *string `json:"parent_comment_id,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt string `json:"created_at"`
 }
 
 type CreatePostRequest struct {

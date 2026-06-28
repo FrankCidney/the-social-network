@@ -9,8 +9,7 @@ var AllowedImageExts = map[string]bool{
 	".gif":  true,
 }
 
-// IsAllowedImageBytes checks magic bytes for JPEG, PNG, and GIF.
-// We do this independently of the filename extension as a second layer of
+// IsAllowedImageBytes checks magic bytes for JPEG, PNG, and GIF. We do this independently of the filename extension as a second layer of
 // validation. A renamed .exe for example, uploaded as .jpg, should be rejected.
 func IsAllowedImageBytes(b []byte) bool {
 	// If the file is fewer than 4 bytes, it can't be a valid JPEG, PNG or GIF

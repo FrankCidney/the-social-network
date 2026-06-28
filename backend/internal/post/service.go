@@ -20,12 +20,10 @@ const (
 	postUploadDir = "uploads/posts"
 )
 
-// GroupMembership is the contract post.Service needs from the groups domain.
-// The interface only contains the one fact a post visibility check
+// GroupMembership is the contract post.Service needs from the groups domain. The interface only contains the one fact a post visibility check
 // needs from the groups domain.
 type GroupMembership interface {
-	// IsMember reports whether userID is an accepted member of groupID.
-	// Implementations should treat "invited" and "requested" status rows
+	// IsMember reports whether userID is an accepted member of groupID. Implementations should treat "invited" and "requested" status rows
 	// as NOT a member. Only "accepted" counts.
 	IsMember(groupID, userID string) (bool, error)
 }
@@ -33,8 +31,7 @@ type GroupMembership interface {
 type Service interface {
 	// CreatePost validates privacy + visible_to/group_id, then saves the post.
 	CreatePost(authorID string, req models.CreatePostRequest) (*models.Post, error)
-	// GetPost enforces visibility. It returns apperror.NotFound if viewerID can't see it,
-	// not Forbidden, so we don't confirm the post's existence to non-viewers.
+	// GetPost enforces visibility. It returns apperror.NotFound if viewerID can't see it, not Forbidden, so we don't confirm the post's existence to non-viewers.
 	GetPost(viewerID, postID string) (*models.PostResponse, error)
 	UpdatePost(authorID, postID string, req models.UpdatePostRequest) error
 	DeletePost(authorID, postID string) error
@@ -71,12 +68,9 @@ func (s *service) CreatePost(authorID string, req models.CreatePostRequest) (*mo
 		return nil, err
 	}
 	content := strings.TrimSpace(req.Content)
-	// Image-only posts are allowed (matches the DB's content-or-image CHECK).
-	// We don't reject empty content here. An image-only post starts with
-	// empty content and gets ImageURL attached via UploadPostImage right
-	// after creation. The DB CHECK is the actual enforcement point for
-	// "must have content or image"; we don't duplicate that check here because
-	// at creation time we can't yet know whether an image upload is coming next.
+	// Image-only posts are allowed (matches the DB's content-or-image CHECK). We don't reject empty content here. An image-only post starts with
+	// empty content and gets ImageURL attached via UploadPostImage right after creation. The DB CHECK is the actual enforcement point for
+	// "must have content or image"; we don't duplicate that check here because at creation time we can't yet know whether an image upload is coming next.
 
 	if err := s.validatePrivacyInvariants(authorID, privacy, req.GroupID, req.VisibleTo); err != nil {
 		return nil, err
@@ -115,8 +109,7 @@ func (s *service) GetPost(viewerID, postID string) (*models.PostResponse, error)
 		return nil, err
 	}
 	if !allowed {
-		// We use NotFound instead of Forbidden so as not to reveal
-		// that a private/group post exists to someone who isn't
+		// We use NotFound instead of Forbidden so as not to reveal that a private/group post exists to someone who isn't
 		// allowed to see it.
 		return nil, apperror.NotFound("post not found")
 	}
@@ -135,8 +128,7 @@ func (s *service) UpdatePost(authorID, postID string, req models.UpdatePostReque
 		return err
 	}
 	if p.UserID != authorID {
-		// NotFound rather than Forbidden for the same reason as GetPost.
-		// No reason to confirm to a non-owner that this post ID exists.
+		// NotFound rather than Forbidden for the same reason as GetPost. No reason to confirm to a non-owner that this post ID exists.
 		return apperror.NotFound("post not found")
 	}
 
@@ -345,9 +337,8 @@ func normalizePrivacy(v string) (string, error) {
 	}
 }
 
-// validatePrivacyInvariants enforces the rules the DB CHECK constraints also
-// encode, but does it in the service layer so we get a clear apperror.BadInput
-// instead of an opaque SQLite constraint-violation error.
+// validatePrivacyInvariants enforces the rules the DB CHECK constraints also encode, but does it in the service layer so we get a clear 
+// apperror.BadInput instead of an opaque SQLite constraint-violation error.
 func (s *service) validatePrivacyInvariants(authorID, privacy string, groupID *string, visibleTo []string) error {
 	switch privacy {
 	case models.PrivacyGroup:
@@ -386,8 +377,7 @@ func (s *service) isGroupMember(userID, groupID string) (bool, error) {
 	return s.groups.IsMember(groupID, userID)
 }
 
-// validateViewersAreFollowers enforces "must choose from followers, not
-// non-followers". Rejects the whole request if any listed user isn't a
+// validateViewersAreFollowers enforces "must choose from followers, not non-followers". Rejects the whole request if any listed user isn't a
 // confirmed follower of authorID.
 func (s *service) validateViewersAreFollowers(authorID string, viewerIDs []string) error {
 	for _, viewerID := range viewerIDs {
@@ -404,8 +394,7 @@ func (s *service) validateViewersAreFollowers(authorID string, viewerIDs []strin
 
 func (s *service) attachAuthors(posts []*models.Post) ([]*models.PostResponse, error) {
 	out := make([]*models.PostResponse, 0, len(posts))
-	// Cache lookups within a single page. A feed page can easily contain
-	// several posts from the same author.
+	// Cache lookups within a single page. A feed page can easily contain several posts from the same author.
 	cache := make(map[string]*models.User)
  
 	for _, p := range posts {
