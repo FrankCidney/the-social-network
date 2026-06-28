@@ -44,6 +44,9 @@ type Service interface {
 	GetGroupPosts(viewerID, groupID string, limit, offset int) (*models.PostListResponse, error)
 
 	CanViewPost(viewerID, postID string) (bool, error)
+	// IsPostOwner reports whether userID is the author of postID. Used by comment.Service to let a post's owner delete comments on their own post, in addition 
+	// to commenters deleting their own.
+	IsPostOwner(userID, postID string) (bool, error)
 }
 
 type service struct {
@@ -301,6 +304,14 @@ func (s *service) CanViewPost(viewerID, postID string) (bool, error) {
 	}
 
 	return s.canView(viewerID, p)
+}
+
+func (s *service) IsPostOwner(userID, postID string) (bool, error) {
+	p, err := s.posts.GetPostByID(postID)
+	if err != nil {
+		return false, err
+	}
+	return p.UserID == userID, nil
 }
 
 func (s *service) canView(viewerID string, p *models.Post) (bool, error) {

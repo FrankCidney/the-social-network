@@ -1,11 +1,15 @@
 package comment
 
 import (
+	"fmt"
 	"mime/multipart"
+	"os"
+	"path/filepath"
 	"social-network/internal/apperror"
 	"social-network/internal/models"
 	"social-network/internal/post"
 	"social-network/internal/repository"
+	"social-network/internal/shared/mediavalidate"
 	"sort"
 	"strings"
 	"time"
@@ -37,9 +41,9 @@ type service struct {
 	postSvc  post.Service
 }
  
-// func NewService(comments repository.CommentRepository, users repository.UserRepository, postSvc post.Service) Service {
-// 	return &service{comments: comments, users: users, postSvc: postSvc}
-// }
+func NewService(comments repository.CommentRepository, users repository.UserRepository, postSvc post.Service) Service {
+	return &service{comments: comments, users: users, postSvc: postSvc}
+}
 
 func (s *service) AddComment(authorID, postID string, req models.CreateCommentRequest) (*models.Comment, error) {
 	allowed, err := s.postSvc.CanViewPost(authorID, postID)
@@ -97,6 +101,83 @@ func (s *service) GetCommentTree(viewerID, postID string) ([]*models.CommentResp
 	}
  
 	return s.buildTree(flat)
+}
+
+func (s *service) DeleteComment(authorID, commentID string) error {
+	c, err := s.comments.GetCommentByID(commentID)
+	if err != nil {
+		return err
+	}
+
+	if c.UserID == authorID {
+		return s.comments.DeleteComment(commentID)
+	}
+
+	isPostOwner, err := s.postSvc.IsPostOwner(authorID, c.PostID)
+	if err != nil {
+		return err
+	}
+	if !isPostOwner {
+		return apperror.Forbidden("you can only delete your own comments, or comments on your own posts")
+	}
+
+	return s.comments.DeleteComment(commentID)
+}
+
+func (s *service) UploadCommentImage(authorID, commentID string, file multipart.File, header *multipart.FileHeader) (string, error) {
+	c, err := s.comments.GetCommentByID(commentID)
+	if err != nil {
+		return "", err
+	}
+	if c.UserID != authorID {
+		return "", apperror.NotFound("comment not found")
+	}
+ 
+	if header.Size > mediavalidate.MaxImageSize {
+		return "", apperror.BadInput("image must be under 5 MB")
+	}
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if !mediavalidate.AllowedImageExts[ext] {
+		return "", apperror.BadInput("image must be a JPEG, PNG, or GIF")
+	}
+ 
+	buf := make([]byte, 512)
+	n, err := file.Read(buf)
+	if err != nil {
+		return "", apperror.Internal("could not read file")
+	}
+	if !mediavalidate.IsAllowedImageBytes(buf[:n]) {
+		return "", apperror.BadInput("image must be a JPEG, PNG, or GIF")
+	}
+	if _, err := file.Seek(0, 0); err != nil {
+		return "", apperror.Internal("could not process file")
+	}
+ 
+	if err := os.MkdirAll(commentUploadDir, 0o755); err != nil {
+		return "", apperror.Internal("could not create upload directory")
+	}
+ 
+	filename := fmt.Sprintf("%s_%d%s", commentID, time.Now().UnixNano(), ext)
+	destPath := filepath.Join(commentUploadDir, filename)
+ 
+	dest, err := os.Create(destPath)
+	if err != nil {
+		return "", apperror.Internal("could not save image")
+	}
+	defer dest.Close()
+ 
+	if _, err := dest.ReadFrom(file); err != nil {
+		_ = os.Remove(destPath)
+		return "", apperror.Internal("could not write image")
+	}
+ 
+	c.ImageURL = destPath
+	if err := s.comments.UpdateComment(c); err != nil {
+		_ = os.Remove(destPath)
+		return "", err
+	}
+ 
+	return destPath, nil
 }
 
 // Tree assembly
