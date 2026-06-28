@@ -38,15 +38,15 @@ type Service interface {
 type service struct {
 	comments repository.CommentRepository
 	users    repository.UserRepository
-	postSvc  post.Service
+	postService  post.Service
 }
  
-func NewService(comments repository.CommentRepository, users repository.UserRepository, postSvc post.Service) Service {
-	return &service{comments: comments, users: users, postSvc: postSvc}
+func NewService(comments repository.CommentRepository, users repository.UserRepository, postService post.Service) Service {
+	return &service{comments: comments, users: users, postService: postService}
 }
 
 func (s *service) AddComment(authorID, postID string, req models.CreateCommentRequest) (*models.Comment, error) {
-	allowed, err := s.postSvc.CanViewPost(authorID, postID)
+	allowed, err := s.postService.CanViewPost(authorID, postID)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func (s *service) AddComment(authorID, postID string, req models.CreateCommentRe
 }
 
 func (s *service) GetCommentTree(viewerID, postID string) ([]*models.CommentResponse, error) {
-	allowed, err := s.postSvc.CanViewPost(viewerID, postID)
+	allowed, err := s.postService.CanViewPost(viewerID, postID)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func (s *service) DeleteComment(authorID, commentID string) error {
 		return s.comments.DeleteComment(commentID)
 	}
 
-	isPostOwner, err := s.postSvc.IsPostOwner(authorID, c.PostID)
+	isPostOwner, err := s.postService.IsPostOwner(authorID, c.PostID)
 	if err != nil {
 		return err
 	}
