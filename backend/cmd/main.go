@@ -23,7 +23,7 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	store, err := db.NewSQLiteStore("./social-network.db", "./internal/db/migrations/sqlite")
+	store, err := db.NewSQLiteStore("./data/social-network.db", "./internal/db/migrations/sqlite")
 	if err != nil {
 		slog.Error("database initialization failed", "error", err)
 		os.Exit(1)
