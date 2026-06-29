@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"social-network/internal/apperror"
 	"social-network/internal/response"
@@ -13,6 +14,7 @@ func writeServiceError(w http.ResponseWriter, err error) {
 	var appErr *apperror.AppError
 	if !errors.As(err, &appErr) {
 		// Unexpected error — don't leak internals
+		slog.Error("unhandled error reached handler", "error", err)
 		response.Error(w, apperror.Internal("something went wrong"), http.StatusInternalServerError)
 		return
 	}

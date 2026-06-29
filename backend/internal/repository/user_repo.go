@@ -34,7 +34,7 @@ func (r *sqliteUserRepo) CreateUser(u *models.User) error {
 	_, err := r.db.Exec(query,
 		u.ID, u.Email, u.Password, u.FirstName, u.LastName,
 		u.DOB, u.Nickname, u.AboutMe, u.AvatarPath,
-		booleanToInt(u.IsPublic), u.CreatedAt,
+		u.IsPublic, u.CreatedAt,
 	)
 	if err != nil {
 		if isSQLiteUniqueViolation(err) {
@@ -54,11 +54,10 @@ func (r *sqliteUserRepo) GetUserByID(id string) (*models.User, error) {
 		FROM users WHERE id = ?`
 
 	u := &models.User{}
-	var isPublic int
 
 	err := r.db.QueryRow(query, id).Scan(
 		&u.ID, &u.Email, &u.Password, &u.FirstName, &u.LastName, &u.DOB,
-		&u.Nickname, &u.AboutMe, &u.AvatarPath, &isPublic, &u.CreatedAt,
+		&u.Nickname, &u.AboutMe, &u.AvatarPath, &u.IsPublic, &u.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -67,7 +66,6 @@ func (r *sqliteUserRepo) GetUserByID(id string) (*models.User, error) {
 		return nil, fmt.Errorf("get user by id: %w", err)
 	}
 
-	u.IsPublic = isPublic == 1
 	return u, nil
 }
 
@@ -94,10 +92,9 @@ func (r *sqliteUserRepo) GetUserByEmail(email string) (*models.User, error) {
 		FROM users WHERE email = ?`
 
 	u := &models.User{}
-	var isPublic int
 	err := r.db.QueryRow(query, email).Scan(
 		&u.ID, &u.Email, &u.Password, &u.FirstName, &u.LastName, &u.DOB,
-		&u.Nickname, &u.AboutMe, &u.AvatarPath, &isPublic, &u.CreatedAt,
+		&u.Nickname, &u.AboutMe, &u.AvatarPath, &u.IsPublic, &u.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -105,13 +102,13 @@ func (r *sqliteUserRepo) GetUserByEmail(email string) (*models.User, error) {
 		}
 		return nil, fmt.Errorf("get user by email: %w", err)
 	}
-	u.IsPublic = isPublic == 1
+
 	return u, nil
 }
 
 func (r *sqliteUserRepo) SetProfileVisibility(userID string, isPublic bool) error {
 	const query = `UPDATE users SET is_public = ? WHERE id = ?`
-	res, err := r.db.Exec(query, booleanToInt(isPublic), userID)
+	res, err := r.db.Exec(query, isPublic, userID)
 	if err != nil {
 		return fmt.Errorf("set visibility: %w", err)
 	}
@@ -125,11 +122,4 @@ func (r *sqliteUserRepo) UpdateAvatarPath(userID, path string) error {
 		return fmt.Errorf("update avatar: %w", err)
 	}
 	return requireOneRow(res, "user")
-}
-
-func booleanToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
 }
