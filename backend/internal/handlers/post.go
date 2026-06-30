@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"social-network/internal/apperror"
 	"social-network/internal/middleware"
@@ -90,6 +92,8 @@ func (h *PostHandler) UploadPostImage(w http.ResponseWriter, r *http.Request) {
  
 	r.Body = http.MaxBytesReader(w, r.Body, 6<<20)
 	if err := r.ParseMultipartForm(5 << 20); err != nil {
+		fmt.Println("header", r.Header)
+		slog.Error("handlers.UploadPostImage: could not parse form", "error", err)
 		response.Error(w, apperror.BadInput("could not parse form"), http.StatusBadRequest)
 		return
 	}

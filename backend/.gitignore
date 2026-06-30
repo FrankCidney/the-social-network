@@ -4,3 +4,7 @@
 *.db-journal
 *.db-wal
 *.db-shm
+
+testconventions.md
+
+/uploads/
