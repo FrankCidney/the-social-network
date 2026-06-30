@@ -137,7 +137,8 @@ func (f fakeMultipartFile) Close() error { return nil }
 
 // helper to create a valid user
 func createUser(t *testing.T, users repository.UserRepository, id, email string) {
-	_ = users.CreateUser(&models.User{
+	t.Helper()
+	err := users.CreateUser(&models.User{
 		ID:        id,
 		Email:     email,
 		Password:  "password",
@@ -146,26 +147,39 @@ func createUser(t *testing.T, users repository.UserRepository, id, email string)
 		DOB:       "1990-01-01",
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	})
+	if err != nil {
+		t.Fatalf("failed to create user %s: %v", id, err)
+	}
 }
 
 // helper to create a valid post
 func createPost(t *testing.T, posts repository.PostRepository, id, userID string) {
-	_ = posts.CreatePost(&models.Post{
+	t.Helper()
+	err := posts.CreatePost(&models.Post{
 		ID:        id,
 		UserID:    userID,
+		Content:   "non-empty post content",
 		Privacy:   models.PrivacyPublic,
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	})
+	if err != nil {
+		t.Fatalf("failed to create post %s: %v", id, err)
+	}
 }
 
 // helper to create a valid comment
 func createComment(t *testing.T, comments repository.CommentRepository, id, postID, userID string) {
-	_ = comments.CreateComment(&models.Comment{
+	t.Helper()
+	err := comments.CreateComment(&models.Comment{
 		ID:        id,
 		PostID:    postID,
 		UserID:    userID,
+		Content:   "non-empty comment content",
 		CreatedAt: time.Now().UTC().Format(time.RFC3339),
 	})
+	if err != nil {
+		t.Fatalf("failed to create comment %s: %v", id, err)
+	}
 }
 
 func TestAddComment(t *testing.T) {
@@ -594,6 +608,8 @@ func TestDeleteComment(t *testing.T) {
 }
 
 func TestUploadCommentImage(t *testing.T) {
+	defer os.RemoveAll("uploads")
+
 	const (
 		authorID  = "author-123"
 		commentID = "comment-456"
@@ -641,6 +657,11 @@ func TestUploadCommentImage(t *testing.T) {
 			commentID: commentID,
 			fileBytes: make([]byte, 6<<20), // 6 MB
 			filename:  "image.png",
+			setupDB: func(t *testing.T, db *sql.DB, users repository.UserRepository, posts repository.PostRepository, comments repository.CommentRepository) {
+				createUser(t, users, authorID, "author@example.com")
+				createPost(t, posts, "post-123", authorID)
+				createComment(t, comments, commentID, "post-123", authorID)
+			},
 			assertErr: func(t *testing.T, err error) {
 				if !errors.Is(err, apperror.ErrBadInput) {
 					t.Errorf("expected ErrBadInput, got %v", err)
@@ -653,6 +674,11 @@ func TestUploadCommentImage(t *testing.T) {
 			commentID: commentID,
 			fileBytes: validPngBytes,
 			filename:  "image.txt",
+			setupDB: func(t *testing.T, db *sql.DB, users repository.UserRepository, posts repository.PostRepository, comments repository.CommentRepository) {
+				createUser(t, users, authorID, "author@example.com")
+				createPost(t, posts, "post-123", authorID)
+				createComment(t, comments, commentID, "post-123", authorID)
+			},
 			assertErr: func(t *testing.T, err error) {
 				if !errors.Is(err, apperror.ErrBadInput) {
 					t.Errorf("expected ErrBadInput, got %v", err)
@@ -665,6 +691,11 @@ func TestUploadCommentImage(t *testing.T) {
 			commentID: commentID,
 			fileBytes: []byte("not-a-png-or-jpeg-or-gif"),
 			filename:  "image.png",
+			setupDB: func(t *testing.T, db *sql.DB, users repository.UserRepository, posts repository.PostRepository, comments repository.CommentRepository) {
+				createUser(t, users, authorID, "author@example.com")
+				createPost(t, posts, "post-123", authorID)
+				createComment(t, comments, commentID, "post-123", authorID)
+			},
 			assertErr: func(t *testing.T, err error) {
 				if !errors.Is(err, apperror.ErrBadInput) {
 					t.Errorf("expected ErrBadInput, got %v", err)
