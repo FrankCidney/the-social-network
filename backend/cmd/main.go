@@ -7,9 +7,11 @@ import (
 	"os"
 	"os/signal"
 	"social-network/internal/auth"
+	"social-network/internal/comment"
 	"social-network/internal/db"
 	"social-network/internal/follow"
 	"social-network/internal/handlers"
+	"social-network/internal/post"
 	"social-network/internal/repository"
 	"social-network/internal/routes"
 	"social-network/internal/user"
@@ -21,7 +23,7 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	store, err := db.NewSQLiteStore("./social-network.db", "./internal/db/migrations/sqlite")
+	store, err := db.NewSQLiteStore("./data/social-network.db", "./internal/db/migrations/sqlite")
 	if err != nil {
 		slog.Error("database initialization failed", "error", err)
 		os.Exit(1)
@@ -39,19 +41,32 @@ func main() {
 	userRepo := repository.NewUserRepository(store.DB)
 	sessionRepo := repository.NewSessionRepository(store.DB)
 	followRepo := repository.NewFollowRepository(store.DB)
+	postRepo := repository.NewPostRepository(store.DB)
+	commentRepo := repository.NewCommentRepository(store.DB)
 
 	// Services
 	authService := auth.NewService(userRepo, sessionRepo)
 	userService := user.NewService(userRepo, followRepo)
 	followService := follow.NewService(userRepo, followRepo, nil) // TODO: Wire in notifier after chats service is done
+	postService := post.NewService(postRepo, userRepo, followRepo, nil) // TODO: Wire in GroupMembership after groups is done. Group posts are unreachable until wired in.
+	commentService := comment.NewService(commentRepo, userRepo, postService)
 
 	// Handlers
 	authHandler := handlers.NewAuthHandler(authService)
 	userHandler := handlers.NewUserHandler(userService)
 	followHandler := handlers.NewFollowHandler(followService)
+	postHandler := handlers.NewPostHandler(postService)
+	commentHandler := handlers.NewCommentHandler(commentService)
 
 	// Routes
-	mux := routes.NewRouter(authHandler, userHandler, followHandler, authService)
+	mux := routes.NewRouter(
+		authHandler, 
+		userHandler, 
+		followHandler, 
+		postHandler,
+		commentHandler,
+		authService,
+	)
 
 	// Background cleanup
 	ctx, cancel := context.WithCancel(context.Background())

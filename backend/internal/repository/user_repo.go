@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"social-network/internal/apperror"
 	"social-network/internal/models"
-	"strings"
 )
 
 type UserRepository interface {
@@ -35,7 +34,7 @@ func (r *sqliteUserRepo) CreateUser(u *models.User) error {
 	_, err := r.db.Exec(query,
 		u.ID, u.Email, u.Password, u.FirstName, u.LastName,
 		u.DOB, u.Nickname, u.AboutMe, u.AvatarPath,
-		booleanToInt(u.IsPublic), u.CreatedAt,
+		u.IsPublic, u.CreatedAt,
 	)
 	if err != nil {
 		if isSQLiteUniqueViolation(err) {
@@ -55,11 +54,10 @@ func (r *sqliteUserRepo) GetUserByID(id string) (*models.User, error) {
 		FROM users WHERE id = ?`
 
 	u := &models.User{}
-	var isPublic int
 
 	err := r.db.QueryRow(query, id).Scan(
 		&u.ID, &u.Email, &u.Password, &u.FirstName, &u.LastName, &u.DOB,
-		&u.Nickname, &u.AboutMe, &u.AvatarPath, &isPublic, &u.CreatedAt,
+		&u.Nickname, &u.AboutMe, &u.AvatarPath, &u.IsPublic, &u.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -68,7 +66,6 @@ func (r *sqliteUserRepo) GetUserByID(id string) (*models.User, error) {
 		return nil, fmt.Errorf("get user by id: %w", err)
 	}
 
-	u.IsPublic = isPublic == 1
 	return u, nil
 }
 
@@ -95,10 +92,9 @@ func (r *sqliteUserRepo) GetUserByEmail(email string) (*models.User, error) {
 		FROM users WHERE email = ?`
 
 	u := &models.User{}
-	var isPublic int
 	err := r.db.QueryRow(query, email).Scan(
 		&u.ID, &u.Email, &u.Password, &u.FirstName, &u.LastName, &u.DOB,
-		&u.Nickname, &u.AboutMe, &u.AvatarPath, &isPublic, &u.CreatedAt,
+		&u.Nickname, &u.AboutMe, &u.AvatarPath, &u.IsPublic, &u.CreatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -106,13 +102,13 @@ func (r *sqliteUserRepo) GetUserByEmail(email string) (*models.User, error) {
 		}
 		return nil, fmt.Errorf("get user by email: %w", err)
 	}
-	u.IsPublic = isPublic == 1
+
 	return u, nil
 }
 
 func (r *sqliteUserRepo) SetProfileVisibility(userID string, isPublic bool) error {
 	const query = `UPDATE users SET is_public = ? WHERE id = ?`
-	res, err := r.db.Exec(query, booleanToInt(isPublic), userID)
+	res, err := r.db.Exec(query, isPublic, userID)
 	if err != nil {
 		return fmt.Errorf("set visibility: %w", err)
 	}
@@ -126,34 +122,4 @@ func (r *sqliteUserRepo) UpdateAvatarPath(userID, path string) error {
 		return fmt.Errorf("update avatar: %w", err)
 	}
 	return requireOneRow(res, "user")
-}
-
-func booleanToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
-
-func isSQLiteUniqueViolation(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	msg := err.Error()
-
-	return strings.Contains(msg, "UNIQUE constraint failed") || strings.Contains(msg, "unique constraint failed")
-}
-
-// requireOneRow is used to return an error if the statement affected no rows.
-// This is because SQLite treats updating/deleting a row that doesn't exist (i.e., 0 rows affected) as a success
-func requireOneRow(res sql.Result, entity string) error {
-	n, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("rows affected: %w", err)
-	}
-	if n == 0 {
-		return apperror.NotFound(entity + " not found")
-	}
-	return nil
 }

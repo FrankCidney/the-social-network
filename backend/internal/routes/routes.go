@@ -11,6 +11,8 @@ func NewRouter(
 	authHandler *handlers.AuthHandler,
 	userHandler *handlers.UserHandler,
 	followHandler *handlers.FollowHandler,
+	postHandler *handlers.PostHandler,
+	commentHandler *handlers.CommentHandler,
 	authService auth.Service,
 ) http.Handler {
 	mux := http.NewServeMux()
@@ -18,6 +20,8 @@ func NewRouter(
 	registerAuthRoutes(mux, authHandler, authService)
 	registerProfileRoutes(mux, userHandler, authService)
 	registerFollowRoutes(mux, followHandler, authService)
+	registerPostRoutes(mux, postHandler, authService)
+	registerCommentRoutes(mux, commentHandler, authService)
 	return mux
 }
 
@@ -47,4 +51,22 @@ func registerFollowRoutes(mux *http.ServeMux, h *handlers.FollowHandler, authSer
 	mux.Handle("DELETE /api/follow/{id}", middleware.RequireAuth(authService, http.HandlerFunc(h.Unfollow)))
 	mux.Handle("POST /api/follow/{id}/accept", middleware.RequireAuth(authService, http.HandlerFunc(h.AcceptRequest)))
 	mux.Handle("POST /api/follow/{id}/decline", middleware.RequireAuth(authService, http.HandlerFunc(h.DeclineRequest)))
+}
+
+func registerPostRoutes(mux *http.ServeMux, h *handlers.PostHandler, authService auth.Service) {
+	mux.Handle("POST /api/posts", middleware.RequireAuth(authService, http.HandlerFunc(h.CreatePost)))
+	mux.Handle("GET /api/posts/{id}", middleware.RequireAuth(authService, http.HandlerFunc(h.GetPost)))
+	mux.Handle("PUT /api/posts/{id}",       middleware.RequireAuth(authService, http.HandlerFunc(h.UpdatePost)))
+	mux.Handle("DELETE /api/posts/{id}",       middleware.RequireAuth(authService, http.HandlerFunc(h.DeletePost)))
+	mux.Handle("POST /api/posts/{id}/image", middleware.RequireAuth(authService, http.HandlerFunc(h.UploadPostImage)))
+	mux.Handle("GET /api/feed",             middleware.RequireAuth(authService, http.HandlerFunc(h.GetFeed)))
+	mux.Handle("GET /api/users/{id}/posts", middleware.RequireAuth(authService, http.HandlerFunc(h.GetPostsByAuthor)))
+	mux.Handle("GET /api/groups/{id}/posts", middleware.RequireAuth(authService, http.HandlerFunc(h.GetGroupPosts)))
+}
+
+func registerCommentRoutes(mux *http.ServeMux, h *handlers.CommentHandler, authService auth.Service) {
+	mux.Handle("POST   /api/posts/{id}/comments", middleware.RequireAuth(authService, http.HandlerFunc(h.AddComment)))
+	mux.Handle("GET    /api/posts/{id}/comments", middleware.RequireAuth(authService, http.HandlerFunc(h.GetComments)))
+	mux.Handle("DELETE /api/comments/{id}",       middleware.RequireAuth(authService, http.HandlerFunc(h.DeleteComment)))
+	mux.Handle("POST   /api/comments/{id}/image", middleware.RequireAuth(authService, http.HandlerFunc(h.UploadCommentImage)))
 }

@@ -221,14 +221,13 @@ func (r *sqliteFollowRepo) scanUsers(query, userID string, limit, offset int) ([
 	var users []*models.User
 	for rows.Next() {
 		u := &models.User{}
-		var isPublic int
+
 		if err := rows.Scan(
 			&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.DOB,
-			&u.Nickname, &u.AboutMe, &u.AvatarPath, &isPublic, &u.CreatedAt,
+			&u.Nickname, &u.AboutMe, &u.AvatarPath, &u.IsPublic, &u.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan user: %w", err)
 		}
-		u.IsPublic = isPublic == 1
 		users = append(users, u)
 	}
 	if err := rows.Err(); err != nil {
