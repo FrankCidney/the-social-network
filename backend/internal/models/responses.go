@@ -39,23 +39,29 @@ type FollowRequestResponse struct {
 }
 
 type PostResponse struct {
-	ID        string      `json:"id"`
-	Author    *PublicUser `json:"author"`
-	GroupID   *string     `json:"group_id,omitempty"`
-	Content   string      `json:"content,omitempty"`
-	ImageURL  string      `json:"image_url,omitempty"`
-	Privacy   string      `json:"privacy"`
-	CreatedAt string      `json:"created_at"`
+	ID            string      `json:"id"`
+	Author        *PublicUser `json:"author"`
+	GroupID       *string     `json:"group_id,omitempty"`
+	Content       string      `json:"content,omitempty"`
+	ImageURL      string      `json:"image_url,omitempty"`
+	Privacy       string      `json:"privacy"`
+	CreatedAt     string      `json:"created_at"`
+	LikesCount    int         `json:"likes_count"`
+	DislikesCount int         `json:"dislikes_count"`
+	UserReaction  string      `json:"user_reaction,omitempty"` // "like", "dislike", or ""
 }
 
 type CommentResponse struct {
-	ID        string             `json:"id"`
-	Author    *PublicUser        `json:"author"`
-	Content   string             `json:"content,omitempty"`
-	ImageURL  string             `json:"image_url,omitempty"`
-	Depth     int                `json:"depth"`
-	CreatedAt string             `json:"created_at"`
-	Replies   []*CommentResponse `json:"replies"`
+	ID            string             `json:"id"`
+	Author        *PublicUser        `json:"author"`
+	Content       string             `json:"content,omitempty"`
+	ImageURL      string             `json:"image_url,omitempty"`
+	Depth         int                `json:"depth"`
+	CreatedAt     string             `json:"created_at"`
+	Replies       []*CommentResponse `json:"replies"`
+	LikesCount    int                `json:"likes_count"`
+	DislikesCount int                `json:"dislikes_count"`
+	UserReaction  string             `json:"user_reaction,omitempty"` // "like", "dislike", or ""
 }
 
 // PostListResponse is the paginated response for a feed.
@@ -73,4 +79,16 @@ type ErrorValue struct {
 
 type ErrorResponse struct {
 	Error ErrorValue `json:"error"`
+}
+
+type ReactPostResponse struct {
+	LikesCount    int    `json:"likes_count"`
+	DislikesCount int    `json:"dislikes_count"`
+	UserReaction  string `json:"user_reaction,omitempty"` // "like", "dislike", or "" (if none)
+}
+
+type ReactCommentResponse struct {
+	LikesCount    int    `json:"likes_count"`
+	DislikesCount int    `json:"dislikes_count"`
+	UserReaction  string `json:"user_reaction,omitempty"` // "like", "dislike", or "" (if none)
 }

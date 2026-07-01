@@ -54,3 +54,11 @@ type CreateEventRequest struct {
 	Description string `json:"description"`
 	EventDate   string `json:"event_date"` // expected ISO8601
 }
+
+type ReactPostRequest struct {
+	ReactionType string `json:"reaction_type"` // "like" or "dislike"
+}
+
+type ReactCommentRequest struct {
+	ReactionType string `json:"reaction_type"` // "like" or "dislike"
+}

@@ -28,3 +28,17 @@ type Comment struct {
 	ParentCommentID *string `json:"parent_comment_id,omitempty"`
 	CreatedAt string `json:"created_at"`
 }
+
+type PostReaction struct {
+	PostID       string `json:"post_id"`
+	UserID       string `json:"user_id"`
+	ReactionType string `json:"reaction_type"` // "like" or "dislike"
+	CreatedAt    string `json:"created_at"`
+}
+
+type CommentReaction struct {
+	CommentID    string `json:"comment_id"`
+	UserID       string `json:"user_id"`
+	ReactionType string `json:"reaction_type"` // "like" or "dislike"
+	CreatedAt    string `json:"created_at"`
+}
