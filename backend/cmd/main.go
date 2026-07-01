@@ -76,9 +76,12 @@ func main() {
 	mux := routes.NewRouter(
 		authHandler, 
 		userHandler, 
-		followHandler, wsHandler, groupHandler, chatHandler, 
+		followHandler, 
 		postHandler,
 		commentHandler,
+		wsHandler, 
+		groupHandler, 
+		chatHandler,
 		authService,
 	)
 
