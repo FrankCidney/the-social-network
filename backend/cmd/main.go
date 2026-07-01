@@ -8,13 +8,16 @@ import (
 	"os/signal"
 	"social-network/internal/auth"
 	"social-network/internal/comment"
+	"social-network/internal/chat"
 	"social-network/internal/db"
 	"social-network/internal/follow"
+	"social-network/internal/groups"
 	"social-network/internal/handlers"
 	"social-network/internal/post"
 	"social-network/internal/repository"
 	"social-network/internal/routes"
 	"social-network/internal/user"
+	"social-network/internal/websocket"
 	"syscall"
 	"time"
 )
@@ -43,11 +46,20 @@ func main() {
 	followRepo := repository.NewFollowRepository(store.DB)
 	postRepo := repository.NewPostRepository(store.DB)
 	commentRepo := repository.NewCommentRepository(store.DB)
+	groupRepo := repository.NewGroupRepository(store.DB)
+	msgRepo := repository.NewMessageRepository(store.DB)
+
+	// WebSockets
+	wsManager := websocket.NewManager()
+	wsNotifier := websocket.NewWSNotifier(wsManager)
+	wsHandler := handlers.NewWebSocketHandler(wsManager)
 
 	// Services
 	authService := auth.NewService(userRepo, sessionRepo)
 	userService := user.NewService(userRepo, followRepo)
-	followService := follow.NewService(userRepo, followRepo, nil) // TODO: Wire in notifier after chats service is done
+	followService := follow.NewService(userRepo, followRepo, wsNotifier)
+	groupService := groups.NewService(groupRepo, wsNotifier)
+	chatService := chat.NewService(msgRepo, groupRepo, followRepo, wsNotifier)
 	postService := post.NewService(postRepo, userRepo, followRepo, nil) // TODO: Wire in GroupMembership after groups is done. Group posts are unreachable until wired in.
 	commentService := comment.NewService(commentRepo, userRepo, postService)
 
@@ -57,12 +69,14 @@ func main() {
 	followHandler := handlers.NewFollowHandler(followService)
 	postHandler := handlers.NewPostHandler(postService)
 	commentHandler := handlers.NewCommentHandler(commentService)
+	groupHandler := handlers.NewGroupHandler(groupService)
+	chatHandler := handlers.NewChatHandler(chatService)
 
 	// Routes
 	mux := routes.NewRouter(
 		authHandler, 
 		userHandler, 
-		followHandler, 
+		followHandler, wsHandler, groupHandler, chatHandler, 
 		postHandler,
 		commentHandler,
 		authService,

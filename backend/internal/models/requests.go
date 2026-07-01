@@ -43,3 +43,14 @@ type CreateCommentRequest struct {
 	// ParentCommentID is omitted (nil) for a top-level comment, set for a reply.
 	ParentCommentID *string `json:"parent_comment_id,omitempty"`
 }
+
+type CreateGroupRequest struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
+type CreateEventRequest struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	EventDate   string `json:"event_date"` // expected ISO8601
+}

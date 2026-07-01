@@ -1,17 +1,9 @@
-@import "tailwindcss";
-
-@theme {
-  --color-canvas: #F9FAFB;
-  --color-surface: #FFFFFF;
-  --color-primary: #4F46E5;
-  --color-text-main: #111827;
-  --color-privacy-public: #10B981;
-  --color-privacy-private: #EF4444;
-  --radius-bento: 12px;
-}
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 @layer base {
   body {
-    @apply bg-canvas text-text-main;
+    @apply bg-gray-50 text-gray-900;
   }
 }
