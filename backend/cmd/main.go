@@ -14,6 +14,7 @@ import (
 	"social-network/internal/groups"
 	"social-network/internal/handlers"
 	"social-network/internal/post"
+	"social-network/internal/reaction"
 	"social-network/internal/repository"
 	"social-network/internal/routes"
 	"social-network/internal/user"
@@ -48,6 +49,7 @@ func main() {
 	commentRepo := repository.NewCommentRepository(store.DB)
 	groupRepo := repository.NewGroupRepository(store.DB)
 	msgRepo := repository.NewMessageRepository(store.DB)
+	reactionRepo := repository.NewReactionRepository(store.DB)
 
 	// WebSockets
 	wsManager := websocket.NewManager()
@@ -60,8 +62,9 @@ func main() {
 	followService := follow.NewService(userRepo, followRepo, wsNotifier)
 	groupService := groups.NewService(groupRepo, wsNotifier)
 	chatService := chat.NewService(msgRepo, groupRepo, followRepo, wsNotifier)
-	postService := post.NewService(postRepo, userRepo, followRepo, nil) // TODO: Wire in GroupMembership after groups is done. Group posts are unreachable until wired in.
-	commentService := comment.NewService(commentRepo, userRepo, postService)
+	postService := post.NewService(postRepo, userRepo, followRepo, nil, reactionRepo) // TODO: Wire in GroupMembership after groups is done. Group posts are unreachable until wired in.
+	commentService := comment.NewService(commentRepo, userRepo, postService, reactionRepo)
+	reactionService := reaction.NewService(reactionRepo, commentRepo, postService)
 
 	// Handlers
 	authHandler := handlers.NewAuthHandler(authService)
@@ -71,6 +74,7 @@ func main() {
 	commentHandler := handlers.NewCommentHandler(commentService)
 	groupHandler := handlers.NewGroupHandler(groupService)
 	chatHandler := handlers.NewChatHandler(chatService)
+	reactionHandler := handlers.NewReactionHandler(reactionService)
 
 	// Routes
 	mux := routes.NewRouter(
@@ -82,6 +86,7 @@ func main() {
 		wsHandler, 
 		groupHandler, 
 		chatHandler,
+		reactionHandler,
 		authService,
 	)
 

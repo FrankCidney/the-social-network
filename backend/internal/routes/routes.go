@@ -16,6 +16,7 @@ func NewRouter(
 	wsHandler *handlers.WebSocketHandler,
 	groupHandler *handlers.GroupHandler,
 	chatHandler *handlers.ChatHandler,
+	reactionHandler *handlers.ReactionHandler,
 	authService auth.Service,
 ) http.Handler {
 	mux := http.NewServeMux()
@@ -27,6 +28,7 @@ func NewRouter(
 	registerCommentRoutes(mux, commentHandler, authService)
 	registerGroupRoutes(mux, groupHandler, authService)
 	registerChatRoutes(mux, chatHandler, authService)
+	registerReactionRoutes(mux, reactionHandler, authService)
 	
 	mux.Handle("GET /api/ws", middleware.RequireAuth(authService, http.HandlerFunc(wsHandler.ServeWS)))
 	
@@ -94,4 +96,9 @@ func registerChatRoutes(mux *http.ServeMux, h *handlers.ChatHandler, authService
 	mux.Handle("POST /api/chat/messages", middleware.RequireAuth(authService, http.HandlerFunc(h.SendMessage)))
 	mux.Handle("GET /api/chat/messages/{userId}", middleware.RequireAuth(authService, http.HandlerFunc(h.GetPrivateMessages)))
 	mux.Handle("GET /api/groups/{id}/messages", middleware.RequireAuth(authService, http.HandlerFunc(h.GetGroupMessages)))
+}
+
+func registerReactionRoutes(mux *http.ServeMux, h *handlers.ReactionHandler, authService auth.Service) {
+	mux.Handle("POST /api/posts/{id}/react", middleware.RequireAuth(authService, http.HandlerFunc(h.ReactToPost)))
+	mux.Handle("POST /api/comments/{id}/react", middleware.RequireAuth(authService, http.HandlerFunc(h.ReactToComment)))
 }
