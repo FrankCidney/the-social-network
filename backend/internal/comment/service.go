@@ -36,13 +36,14 @@ type Service interface {
 }
  
 type service struct {
-	comments repository.CommentRepository
-	users    repository.UserRepository
-	postService  post.Service
+	comments    repository.CommentRepository
+	users       repository.UserRepository
+	postService post.Service
+	reactions   repository.ReactionRepository
 }
  
-func NewService(comments repository.CommentRepository, users repository.UserRepository, postService post.Service) Service {
-	return &service{comments: comments, users: users, postService: postService}
+func NewService(comments repository.CommentRepository, users repository.UserRepository, postService post.Service, reactions repository.ReactionRepository) Service {
+	return &service{comments: comments, users: users, postService: postService, reactions: reactions}
 }
 
 func (s *service) AddComment(authorID, postID string, req models.CreateCommentRequest) (*models.Comment, error) {
@@ -99,8 +100,27 @@ func (s *service) GetCommentTree(viewerID, postID string) ([]*models.CommentResp
 	if err != nil {
 		return nil, err
 	}
- 
-	return s.buildTree(flat)
+
+	// Gather comment IDs for batch reaction queries.
+	commentIDs := make([]string, len(flat))
+	for i, c := range flat {
+		commentIDs[i] = c.ID
+	}
+
+	var countsMap map[string]repository.ReactionCounts
+	var userReactionsMap map[string]string
+	if s.reactions != nil && len(commentIDs) > 0 {
+		countsMap, err = s.reactions.GetCommentReactionCountsForComments(commentIDs)
+		if err != nil {
+			return nil, err
+		}
+		userReactionsMap, err = s.reactions.GetUserReactionsForComments(commentIDs, viewerID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return s.buildTree(flat, countsMap, userReactionsMap)
 }
 
 func (s *service) DeleteComment(authorID, commentID string) error {
@@ -186,7 +206,7 @@ func (s *service) UploadCommentImage(authorID, commentID string, file multipart.
 //
 // Ordering rule: top-level comments newest-first, replies within a thread oldest-first (chat-style). Since the input is already ascending
 // by created_at, children are already in the right order once grouped. Only the top-level slice needs reversing.
-func (s *service) buildTree(flat []*models.Comment) ([]*models.CommentResponse, error) {
+func (s *service) buildTree(flat []*models.Comment, countsMap map[string]repository.ReactionCounts, userReactionsMap map[string]string) ([]*models.CommentResponse, error) {
 	if len(flat) == 0 {
 		return []*models.CommentResponse{}, nil
 	}
@@ -215,14 +235,27 @@ func (s *service) buildTree(flat []*models.Comment) ([]*models.CommentResponse, 
  
 	var assemble func(c *models.Comment, depth int) *models.CommentResponse
 	assemble = func(c *models.Comment, depth int) *models.CommentResponse {
+		var likes, dislikes int
+		var userReaction string
+		if countsMap != nil {
+			counts := countsMap[c.ID]
+			likes = counts.Likes
+			dislikes = counts.Dislikes
+		}
+		if userReactionsMap != nil {
+			userReaction = userReactionsMap[c.ID]
+		}
 		resp := &models.CommentResponse{
-			ID:        c.ID,
-			Author:    authors[c.UserID],
-			Content:   c.Content,
-			ImageURL:  c.ImageURL,
-			Depth:     depth,
-			CreatedAt: c.CreatedAt,
-			Replies:   []*models.CommentResponse{},
+			ID:            c.ID,
+			Author:        authors[c.UserID],
+			Content:       c.Content,
+			ImageURL:      c.ImageURL,
+			Depth:         depth,
+			CreatedAt:     c.CreatedAt,
+			Replies:       []*models.CommentResponse{},
+			LikesCount:    likes,
+			DislikesCount: dislikes,
+			UserReaction:  userReaction,
 		}
 		// childrenOf[c.ID] is already oldest-first because the source slice was fetched ORDER BY created_at ASC. No re-sort needed here.
 		for _, child := range childrenOf[c.ID] {

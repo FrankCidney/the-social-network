@@ -50,10 +50,11 @@ type Service interface {
 }
 
 type service struct {
-	posts   repository.PostRepository
-	users   repository.UserRepository
-	follows repository.FollowRepository
-	groups  GroupMembership
+	posts     repository.PostRepository
+	users     repository.UserRepository
+	follows   repository.FollowRepository
+	groups    GroupMembership
+	reactions repository.ReactionRepository
 }
 
 func NewService(
@@ -61,8 +62,9 @@ func NewService(
 	users repository.UserRepository,
 	follows repository.FollowRepository,
 	groups GroupMembership,
+	reactions repository.ReactionRepository,
 ) Service {
-	return &service{posts: posts, users: users, follows: follows, groups: groups}
+	return &service{posts: posts, users: users, follows: follows, groups: groups, reactions: reactions}
 }
 
 func (s *service) CreatePost(authorID string, req models.CreatePostRequest) (*models.Post, error) {
@@ -122,7 +124,20 @@ func (s *service) GetPost(viewerID, postID string) (*models.PostResponse, error)
 		return nil, err
 	}
 
-	return toPostResponse(p, author), nil
+	var likes, dislikes int
+	var userReaction string
+	if s.reactions != nil {
+		likes, dislikes, err = s.reactions.GetPostReactionCounts(p.ID)
+		if err != nil {
+			return nil, err
+		}
+		userReaction, err = s.reactions.GetPostReaction(p.ID, viewerID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return toPostResponse(p, author, likes, dislikes, userReaction), nil
 }
 
 func (s *service) UpdatePost(authorID, postID string, req models.UpdatePostRequest) error {
@@ -241,11 +256,11 @@ func (s *service) GetFeed(viewerID string, limit, offset int) (*models.PostListR
 		return nil, err
 	}
  
-	responses, err := s.attachAuthors(posts)
+	responses, err := s.attachMetadata(viewerID, posts)
 	if err != nil {
 		return nil, err
 	}
- 
+
 	return &models.PostListResponse{Posts: responses, Total: total, Limit: limit, Offset: offset}, nil
 }
 
@@ -261,11 +276,11 @@ func (s *service) GetPostsByAuthor(viewerID, authorID string, limit, offset int)
 		return nil, err
 	}
  
-	responses, err := s.attachAuthors(posts)
+	responses, err := s.attachMetadata(viewerID, posts)
 	if err != nil {
 		return nil, err
 	}
- 
+
 	return &models.PostListResponse{Posts: responses, Total: total, Limit: limit, Offset: offset}, nil
 }
 
@@ -289,11 +304,11 @@ func (s *service) GetGroupPosts(viewerID, groupID string, limit, offset int) (*m
 		return nil, err
 	}
  
-	responses, err := s.attachAuthors(posts)
+	responses, err := s.attachMetadata(viewerID, posts)
 	if err != nil {
 		return nil, err
 	}
- 
+
 	return &models.PostListResponse{Posts: responses, Total: total, Limit: limit, Offset: offset}, nil
 }
 
@@ -403,35 +418,75 @@ func (s *service) validateViewersAreFollowers(authorID string, viewerIDs []strin
 	return nil
 }
 
-func (s *service) attachAuthors(posts []*models.Post) ([]*models.PostResponse, error) {
+// attachMetadata resolves authors and reaction data (counts + viewer reaction)
+// for a slice of posts using at most 3 queries:
+//  1. per-author user lookups (cached within the call)
+//  2. batch reaction counts for all post IDs
+//  3. batch viewer reactions for all post IDs
+func (s *service) attachMetadata(viewerID string, posts []*models.Post) ([]*models.PostResponse, error) {
 	out := make([]*models.PostResponse, 0, len(posts))
-	// Cache lookups within a single page. A feed page can easily contain several posts from the same author.
-	cache := make(map[string]*models.User)
- 
+	userCache := make(map[string]*models.User)
+
+	// Build post ID list for batch reaction queries.
+	postIDs := make([]string, len(posts))
+	for i, p := range posts {
+		postIDs[i] = p.ID
+	}
+
+	var countsMap map[string]repository.ReactionCounts
+	var userReactionsMap map[string]string
+
+	if s.reactions != nil && len(postIDs) > 0 {
+		var err error
+		countsMap, err = s.reactions.GetPostReactionCountsForPosts(postIDs)
+		if err != nil {
+			return nil, err
+		}
+		userReactionsMap, err = s.reactions.GetUserReactionsForPosts(postIDs, viewerID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	for _, p := range posts {
-		author, ok := cache[p.UserID]
+		author, ok := userCache[p.UserID]
 		if !ok {
 			var err error
 			author, err = s.users.GetUserByID(p.UserID)
 			if err != nil {
 				return nil, err
 			}
-			cache[p.UserID] = author
+			userCache[p.UserID] = author
 		}
-		out = append(out, toPostResponse(p, author))
+
+		var likes, dislikes int
+		var userReaction string
+		if countsMap != nil {
+			counts := countsMap[p.ID]
+			likes = counts.Likes
+			dislikes = counts.Dislikes
+		}
+		if userReactionsMap != nil {
+			userReaction = userReactionsMap[p.ID]
+		}
+
+		out = append(out, toPostResponse(p, author, likes, dislikes, userReaction))
 	}
 
 	return out, nil
 }
 
-func toPostResponse(p *models.Post, author *models.User) *models.PostResponse {
+func toPostResponse(p *models.Post, author *models.User, likes, dislikes int, userReaction string) *models.PostResponse {
 	return &models.PostResponse{
-		ID:        p.ID,
-		Author:    author.ToPublic(),
-		GroupID:   p.GroupID,
-		Content:   p.Content,
-		ImageURL:  p.ImageURL,
-		Privacy:   p.Privacy,
-		CreatedAt: p.CreatedAt,
+		ID:            p.ID,
+		Author:        author.ToPublic(),
+		GroupID:       p.GroupID,
+		Content:       p.Content,
+		ImageURL:      p.ImageURL,
+		Privacy:       p.Privacy,
+		CreatedAt:     p.CreatedAt,
+		LikesCount:    likes,
+		DislikesCount: dislikes,
+		UserReaction:  userReaction,
 	}
 }
