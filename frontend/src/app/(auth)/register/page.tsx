@@ -11,8 +11,12 @@ export default function RegisterPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate register
-    setTimeout(() => setIsLoading(false), 1500);
+
+    // Backend integration point: collect form values and send them to the register endpoint.
+    // Example: POST /api/auth/register
+    // TODO: replace this placeholder with the actual API call and success/error handling.
+
+    setIsLoading(false);
   };
 
   return (
@@ -26,6 +30,7 @@ export default function RegisterPage() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
+          {/* Backend integration point: wire these fields to the register payload. */}
           <Input label="First Name" placeholder="John" required />
           <Input label="Last Name" placeholder="Doe" required />
         </div>
@@ -39,6 +44,7 @@ export default function RegisterPage() {
           </div>
           <Input label="Nickname" placeholder="johndoe" />
           <div className="space-y-1.5">
+            {/* Backend integration point: send optional profile details here if supported by the API. */}
             <label className="text-sm font-medium text-gray-700 ml-1">About Me</label>
             <textarea 
               className="flex min-h-[80px] w-full rounded-bento border border-gray-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
