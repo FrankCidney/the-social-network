@@ -2,71 +2,151 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { authAPI } from '@/lib/api';
 
 export default function RegisterPage() {
-  const [isLoading, setIsLoading] = React.useState(false);
+  const router = useRouter();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const [formData, setFormData] = React.useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    password: '',
+  });
+
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const [success, setSuccess] = React.useState('');
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData((prev) => ({
+      ...prev,
+      [e.target.name]: e.target.value,
+    }));
+  };
+
+  const handleSubmit = async (
+    e: React.FormEvent<HTMLFormElement>
+  ) => {
     e.preventDefault();
+
+    setError('');
+    setSuccess('');
     setIsLoading(true);
 
-    // Backend integration point: collect form values and send them to the register endpoint.
-    // Example: POST /api/auth/register
-    // TODO: replace this placeholder with the actual API call and success/error handling.
+    try {
+      await authAPI.register(formData);
 
-    setIsLoading(false);
+      setSuccess('Registration successful! Redirecting...');
+
+      setTimeout(() => {
+        router.push('/login');
+      }, 1500);
+
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Registration failed.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <h2 className="text-2xl font-bold tracking-tight text-text-main">Create an account</h2>
-        <p className="text-sm text-gray-500">
-          Join the community and start sharing
-        </p>
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="w-full max-w-md bg-white rounded-xl shadow-sm border border-gray-200 p-8">
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          {/* Backend integration point: wire these fields to the register payload. */}
-          <Input label="First Name" placeholder="John" required />
-          <Input label="Last Name" placeholder="Doe" required />
-        </div>
-        <Input label="Email" placeholder="name@example.com" type="email" required />
-        <Input label="Date of Birth" type="date" required />
-        <Input label="Password" placeholder="••••••••" type="password" required />
-        
-        <div className="space-y-4 pt-2">
-          <div className="text-xs text-gray-400 uppercase font-semibold tracking-wider">
-            Optional Details
-          </div>
-          <Input label="Nickname" placeholder="johndoe" />
-          <div className="space-y-1.5">
-            {/* Backend integration point: send optional profile details here if supported by the API. */}
-            <label className="text-sm font-medium text-gray-700 ml-1">About Me</label>
-            <textarea 
-              className="flex min-h-[80px] w-full rounded-bento border border-gray-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-              placeholder="Tell us about yourself..."
-            />
-          </div>
+        <div className="mb-8 text-center">
+          <h1 className="text-3xl font-bold text-gray-900">
+            Create Account
+          </h1>
+
+          <p className="text-gray-500 mt-2">
+            Join the Social Network
+          </p>
         </div>
 
-        <Button 
-          type="submit" 
-          className="w-full" 
-          disabled={isLoading}
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-5"
         >
-          {isLoading ? 'Creating account...' : 'Create Account'}
-        </Button>
-      </form>
+          <Input
+            label="First Name"
+            name="first_name"
+            placeholder="Joel"
+            value={formData.first_name}
+            onChange={handleChange}
+            required
+          />
 
-      <div className="text-center text-sm">
-        <span className="text-gray-500">Already have an account? </span>
-        <Link href="/login" className="font-medium text-primary hover:underline">
-          Sign In
-        </Link>
+          <Input
+            label="Last Name"
+            name="last_name"
+            placeholder="Samoita"
+            value={formData.last_name}
+            onChange={handleChange}
+            required
+          />
+
+          <Input
+            label="Email"
+            type="email"
+            name="email"
+            placeholder="joel@example.com"
+            value={formData.email}
+            onChange={handleChange}
+            required
+          />
+
+          <Input
+            label="Password"
+            type="password"
+            name="password"
+            placeholder="Enter password"
+            value={formData.password}
+            onChange={handleChange}
+            required
+          />
+
+          {error && (
+            <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-600">
+              {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="rounded-lg bg-green-50 border border-green-200 p-3 text-sm text-green-600">
+              {success}
+            </div>
+          )}
+
+          <Button
+            type="submit"
+            variant="primary"
+            className="w-full"
+            disabled={isLoading}
+          >
+            {isLoading
+              ? 'Creating Account...'
+              : 'Create Account'}
+          </Button>
+        </form>
+
+        <p className="mt-6 text-center text-sm text-gray-500">
+          Already have an account?{' '}
+          <Link
+            href="/login"
+            className="text-indigo-600 hover:underline"
+          >
+            Sign in
+          </Link>
+        </p>
+
       </div>
     </div>
   );
