@@ -306,6 +306,7 @@ func TestAddComment(t *testing.T) {
 			users := repository.NewUserRepository(db)
 			posts := repository.NewPostRepository(db)
 			comments := repository.NewCommentRepository(db)
+			reactions := repository.NewReactionRepository(db)
 
 			fakePost := &fakePostService{
 				canViewPost: make(map[string]bool),
@@ -318,7 +319,7 @@ func TestAddComment(t *testing.T) {
 				tt.setupDB(t, db, users, posts, comments)
 			}
 
-			svc := NewService(comments, users, fakePost)
+			svc := NewService(comments, users, fakePost, reactions)
 			_, err := svc.AddComment(tt.authorID, tt.postID, tt.req)
 
 			if tt.assertErr != nil {
@@ -451,6 +452,7 @@ func TestGetCommentTree(t *testing.T) {
 			users := repository.NewUserRepository(db)
 			posts := repository.NewPostRepository(db)
 			comments := repository.NewCommentRepository(db)
+			reactions := repository.NewReactionRepository(db)
 
 			fakePost := &fakePostService{
 				canViewPost: make(map[string]bool),
@@ -463,7 +465,7 @@ func TestGetCommentTree(t *testing.T) {
 				tt.setupDB(t, db, users, posts, comments)
 			}
 
-			svc := NewService(comments, users, fakePost)
+			svc := NewService(comments, users, fakePost, reactions)
 			tree, err := svc.GetCommentTree(tt.viewerID, tt.postID)
 
 			if tt.assertErr != nil {
@@ -581,6 +583,7 @@ func TestDeleteComment(t *testing.T) {
 			users := repository.NewUserRepository(db)
 			posts := repository.NewPostRepository(db)
 			comments := repository.NewCommentRepository(db)
+			reactions := repository.NewReactionRepository(db)
 
 			fakePost := &fakePostService{
 				isPostOwner: make(map[string]bool),
@@ -593,7 +596,7 @@ func TestDeleteComment(t *testing.T) {
 				tt.setupDB(t, db, users, posts, comments)
 			}
 
-			svc := NewService(comments, users, fakePost)
+			svc := NewService(comments, users, fakePost, reactions)
 			err := svc.DeleteComment(tt.authorID, tt.commentID)
 
 			if tt.assertErr != nil {
@@ -761,6 +764,7 @@ func TestUploadCommentImage(t *testing.T) {
 			users := repository.NewUserRepository(db)
 			posts := repository.NewPostRepository(db)
 			comments := repository.NewCommentRepository(db)
+			reactions := repository.NewReactionRepository(db)
 
 			if tt.setupDB != nil {
 				tt.setupDB(t, db, users, posts, comments)
@@ -772,7 +776,7 @@ func TestUploadCommentImage(t *testing.T) {
 				Size:     int64(len(tt.fileBytes)),
 			}
 
-			svc := NewService(comments, users, nil)
+			svc := NewService(comments, users, nil, reactions)
 			path, err := svc.UploadCommentImage(tt.authorID, tt.commentID, file, header)
 
 			if path != "" {

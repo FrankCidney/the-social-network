@@ -2,6 +2,7 @@ package reaction
 
 import (
 	"errors"
+	"mime/multipart"
 	"social-network/internal/apperror"
 	"social-network/internal/models"
 	"social-network/internal/repository"
@@ -27,9 +28,9 @@ func (m *mockPostService) CanViewPost(_, _ string) (bool, error) {
 func (m *mockPostService) CreatePost(_ string, _ models.CreatePostRequest) (*models.Post, error) {
 	return nil, nil
 }
-func (m *mockPostService) GetPost(_, _ string) (*models.PostResponse, error)    { return nil, nil }
+func (m *mockPostService) GetPost(_, _ string) (*models.PostResponse, error)        { return nil, nil }
 func (m *mockPostService) UpdatePost(_, _ string, _ models.UpdatePostRequest) error { return nil }
-func (m *mockPostService) DeletePost(_, _ string) error                         { return nil }
+func (m *mockPostService) DeletePost(_, _ string) error                             { return nil }
 func (m *mockPostService) GetFeed(_ string, _, _ int) (*models.PostListResponse, error) {
 	return nil, nil
 }
@@ -40,7 +41,7 @@ func (m *mockPostService) GetGroupPosts(_, _ string, _, _ int) (*models.PostList
 	return nil, nil
 }
 func (m *mockPostService) IsPostOwner(_, _ string) (bool, error) { return false, nil }
-func (m *mockPostService) UploadPostImage(_, _ string, _ interface{}, _ interface{}) (string, error) {
+func (m *mockPostService) UploadPostImage(_, _ string, _ multipart.File, _ *multipart.FileHeader) (string, error) {
 	return "", nil
 }
 
@@ -142,9 +143,9 @@ func (m *mockCommentRepository) GetCommentByID(_ string) (*models.Comment, error
 }
 
 // Satisfy CommentRepository interface
-func (m *mockCommentRepository) CreateComment(_ *models.Comment) error        { return nil }
-func (m *mockCommentRepository) UpdateComment(_ *models.Comment) error        { return nil }
-func (m *mockCommentRepository) DeleteComment(_ string) error                 { return nil }
+func (m *mockCommentRepository) CreateComment(_ *models.Comment) error { return nil }
+func (m *mockCommentRepository) UpdateComment(_ *models.Comment) error { return nil }
+func (m *mockCommentRepository) DeleteComment(_ string) error          { return nil }
 func (m *mockCommentRepository) GetCommentsForPost(_ string) ([]*models.Comment, error) {
 	return nil, nil
 }

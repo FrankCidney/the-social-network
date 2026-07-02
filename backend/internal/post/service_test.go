@@ -450,13 +450,14 @@ func TestCreatePost(t *testing.T) {
 			postsRepo := repository.NewPostRepository(db)
 			usersRepo := repository.NewUserRepository(db)
 			followsRepo := repository.NewFollowRepository(db)
+			reactionsRepo := repository.NewReactionRepository(db)
 
 			var groups GroupMembership = &mockGroupMembership{}
 			if tt.mockGroups != nil {
 				groups = tt.mockGroups
 			}
 
-			svc := NewService(postsRepo, usersRepo, followsRepo, groups)
+			svc := NewService(postsRepo, usersRepo, followsRepo, groups, reactionsRepo)
 			res, err := svc.CreatePost(tt.authorID, tt.req)
 
 			if tt.assertErr != nil {
@@ -653,13 +654,14 @@ func TestGetPost(t *testing.T) {
 			postsRepo := repository.NewPostRepository(db)
 			usersRepo := repository.NewUserRepository(db)
 			followsRepo := repository.NewFollowRepository(db)
+			reactionsRepo := repository.NewReactionRepository(db)
 
 			var groups GroupMembership = &mockGroupMembership{}
 			if tt.mockGroups != nil {
 				groups = tt.mockGroups
 			}
 
-			svc := NewService(postsRepo, usersRepo, followsRepo, groups)
+			svc := NewService(postsRepo, usersRepo, followsRepo, groups, reactionsRepo)
 			res, err := svc.GetPost(tt.viewerID, tt.postID)
 
 			if tt.assertErr != nil {
@@ -816,8 +818,9 @@ func TestUpdatePost(t *testing.T) {
 			postsRepo := repository.NewPostRepository(db)
 			usersRepo := repository.NewUserRepository(db)
 			followsRepo := repository.NewFollowRepository(db)
+			reactionsRepo := repository.NewReactionRepository(db)
 
-			svc := NewService(postsRepo, usersRepo, followsRepo, &mockGroupMembership{})
+			svc := NewService(postsRepo, usersRepo, followsRepo, &mockGroupMembership{}, reactionsRepo)
 			err := svc.UpdatePost(tt.authorID, tt.postID, tt.req)
 
 			if tt.assertErr != nil {
@@ -898,8 +901,9 @@ func TestDeletePost(t *testing.T) {
 			postsRepo := repository.NewPostRepository(db)
 			usersRepo := repository.NewUserRepository(db)
 			followsRepo := repository.NewFollowRepository(db)
+			reactionsRepo := repository.NewReactionRepository(db)
 
-			svc := NewService(postsRepo, usersRepo, followsRepo, &mockGroupMembership{})
+			svc := NewService(postsRepo, usersRepo, followsRepo, &mockGroupMembership{}, reactionsRepo)
 			err := svc.DeletePost(tt.authorID, tt.postID)
 
 			if tt.assertErr != nil {
@@ -1045,8 +1049,9 @@ func TestUploadPostImage(t *testing.T) {
 			postsRepo := repository.NewPostRepository(db)
 			usersRepo := repository.NewUserRepository(db)
 			followsRepo := repository.NewFollowRepository(db)
+			reactionsRepo := repository.NewReactionRepository(db)
 
-			svc := NewService(postsRepo, usersRepo, followsRepo, &mockGroupMembership{})
+			svc := NewService(postsRepo, usersRepo, followsRepo, &mockGroupMembership{}, reactionsRepo)
 
 			fileReader := bytes.NewReader(tt.fileBytes)
 			file := &mockFile{Reader: fileReader}
@@ -1081,8 +1086,9 @@ func TestGetFeed(t *testing.T) {
 	postsRepo := repository.NewPostRepository(db)
 	usersRepo := repository.NewUserRepository(db)
 	followsRepo := repository.NewFollowRepository(db)
+	reactionsRepo := repository.NewReactionRepository(db)
 
-	svc := NewService(postsRepo, usersRepo, followsRepo, &mockGroupMembership{})
+	svc := NewService(postsRepo, usersRepo, followsRepo, &mockGroupMembership{}, reactionsRepo)
 
 	// Get feed for user-1
 	res, err := svc.GetFeed("user-1", 10, 0)
@@ -1130,8 +1136,9 @@ func TestGetPostsByAuthor(t *testing.T) {
 	postsRepo := repository.NewPostRepository(db)
 	usersRepo := repository.NewUserRepository(db)
 	followsRepo := repository.NewFollowRepository(db)
+	reactionsRepo := repository.NewReactionRepository(db)
 
-	svc := NewService(postsRepo, usersRepo, followsRepo, &mockGroupMembership{})
+	svc := NewService(postsRepo, usersRepo, followsRepo, &mockGroupMembership{}, reactionsRepo)
 
 	// user-1 views user-2's posts
 	res, err := svc.GetPostsByAuthor("user-1", "user-2", 10, 0)
@@ -1162,6 +1169,7 @@ func TestGetGroupPosts(t *testing.T) {
 	postsRepo := repository.NewPostRepository(db)
 	usersRepo := repository.NewUserRepository(db)
 	followsRepo := repository.NewFollowRepository(db)
+	reactionsRepo := repository.NewReactionRepository(db)
 
 	tests := []struct {
 		name       string
@@ -1219,7 +1227,7 @@ func TestGetGroupPosts(t *testing.T) {
 				groups = tt.mockGroups
 			}
 
-			svc := NewService(postsRepo, usersRepo, followsRepo, groups)
+			svc := NewService(postsRepo, usersRepo, followsRepo, groups, reactionsRepo)
 			res, err := svc.GetGroupPosts(tt.viewerID, tt.groupID, 10, 0)
 
 			if tt.assertErr != nil {
@@ -1246,6 +1254,7 @@ func TestCanViewPost(t *testing.T) {
 	postsRepo := repository.NewPostRepository(db)
 	usersRepo := repository.NewUserRepository(db)
 	followsRepo := repository.NewFollowRepository(db)
+	reactionsRepo := repository.NewReactionRepository(db)
 
 	svc := NewService(postsRepo, usersRepo, followsRepo, &mockGroupMembership{
 		isMemberFunc: func(groupID, userID string) (bool, error) {
@@ -1254,7 +1263,7 @@ func TestCanViewPost(t *testing.T) {
 			}
 			return false, nil
 		},
-	})
+	}, reactionsRepo)
 
 	// Can user-1 view post-1 (public)? YES
 	can, err := svc.CanViewPost("user-1", "post-1")
@@ -1282,8 +1291,9 @@ func TestIsPostOwner(t *testing.T) {
 	postsRepo := repository.NewPostRepository(db)
 	usersRepo := repository.NewUserRepository(db)
 	followsRepo := repository.NewFollowRepository(db)
+	reactionsRepo := repository.NewReactionRepository(db)
 
-	svc := NewService(postsRepo, usersRepo, followsRepo, &mockGroupMembership{})
+	svc := NewService(postsRepo, usersRepo, followsRepo, &mockGroupMembership{}, reactionsRepo)
 
 	// Is user-2 owner of post-1? YES
 	isOwner, err := svc.IsPostOwner("user-2", "post-1")
