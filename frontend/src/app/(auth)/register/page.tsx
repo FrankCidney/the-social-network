@@ -15,6 +15,8 @@ export default function RegisterPage() {
     last_name: '',
     email: '',
     password: '',
+    dob: '',
+    nickname: '',
   });
 
   const [isLoading, setIsLoading] = React.useState(false);
@@ -75,23 +77,46 @@ export default function RegisterPage() {
           onSubmit={handleSubmit}
           className="space-y-5"
         >
-          <Input
-            label="First Name"
-            name="first_name"
-            placeholder="Joel"
-            value={formData.first_name}
-            onChange={handleChange}
-            required
-          />
+          <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-4 space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input
+                label="First Name"
+                name="first_name"
+                placeholder="Joel"
+                value={formData.first_name}
+                onChange={handleChange}
+                required
+              />
 
-          <Input
-            label="Last Name"
-            name="last_name"
-            placeholder="Samoita"
-            value={formData.last_name}
-            onChange={handleChange}
-            required
-          />
+              <Input
+                label="Last Name"
+                name="last_name"
+                placeholder="Samoita"
+                value={formData.last_name}
+                onChange={handleChange}
+                required
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input
+                label="Date of Birth"
+                type="date"
+                name="dob"
+                value={formData.dob}
+                onChange={handleChange}
+                required
+              />
+
+              <Input
+                label="Nickname"
+                name="nickname"
+                placeholder="joelz"
+                value={formData.nickname}
+                onChange={handleChange}
+              />
+            </div>
+          </div>
 
           <Input
             label="Email"
