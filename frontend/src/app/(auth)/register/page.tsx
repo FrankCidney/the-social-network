@@ -60,8 +60,8 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+    <div className="max-h-screen flex items-center justify-center bg-gray-30 px-0">
+      <div className="w-full max-w-md bg-white rounded-xl shadow-sm border border-gray-200 p-36 sm:p-8">
 
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-gray-900">
@@ -77,46 +77,36 @@ export default function RegisterPage() {
           onSubmit={handleSubmit}
           className="space-y-5"
         >
-          <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-4 space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Input
-                label="First Name"
-                name="first_name"
-                placeholder="Joel"
-                value={formData.first_name}
-                onChange={handleChange}
-                required
-              />
+          {/* Name row: horizontally aligned */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input
+              label="First Name"
+              name="first_name"
+              placeholder="firstname"
+              value={formData.first_name}
+              onChange={handleChange}
+              required
+            />
 
-              <Input
-                label="Last Name"
-                name="last_name"
-                placeholder="Samoita"
-                value={formData.last_name}
-                onChange={handleChange}
-                required
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Input
-                label="Date of Birth"
-                type="date"
-                name="dob"
-                value={formData.dob}
-                onChange={handleChange}
-                required
-              />
-
-              <Input
-                label="Nickname"
-                name="nickname"
-                placeholder="joelz"
-                value={formData.nickname}
-                onChange={handleChange}
-              />
-            </div>
+            <Input
+              label="Last Name"
+              name="last_name"
+              placeholder="lastname"
+              value={formData.last_name}
+              onChange={handleChange}
+              required
+            />
           </div>
+
+          {/* Everything below: vertically stacked */}
+          <Input
+            label="Date of Birth"
+            type="date"
+            name="dob"
+            value={formData.dob}
+            onChange={handleChange}
+            required
+          />
 
           <Input
             label="Email"
@@ -136,6 +126,14 @@ export default function RegisterPage() {
             value={formData.password}
             onChange={handleChange}
             required
+          />
+
+          <Input
+            label="Nickname"
+            name="nickname"
+            placeholder="nickname"
+            value={formData.nickname}
+            onChange={handleChange}
           />
 
           {error && (
