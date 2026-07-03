@@ -8,10 +8,17 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        canvas: "#F9FAFB",
+        surface: "#FFFFFF",
         primary: "#4f46e5",
+        "text-main": "#111827",
+        privacy: {
+          public: "#10B981",
+          private: "#EF4444",
+        },
       },
       borderRadius: {
-        'bento': '1.5rem',
+        bento: "12px",
       }
     },
   },

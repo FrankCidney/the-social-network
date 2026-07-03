@@ -1,0 +1,80 @@
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
+
+type RequestOptions = Omit<RequestInit, 'body'> & {
+  body?: unknown;
+};
+
+async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const headers = new Headers(options.headers);
+
+  if (options.body !== undefined && !headers.has('content-type')) {
+    headers.set('content-type', 'application/json');
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers,
+    credentials: 'include',
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+  });
+
+  if (!response.ok) {
+    throw new Error(await getErrorMessage(response));
+  }
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  return response.json() as Promise<T>;
+}
+
+async function getErrorMessage(response: Response) {
+  try {
+    const data = await response.json();
+
+    if (typeof data?.error === 'string') {
+      return data.error;
+    }
+
+    if (typeof data?.message === 'string') {
+      return data.message;
+    }
+  } catch {
+    // Fall back to the status text below when the response is not JSON.
+  }
+
+  return response.statusText || 'Request failed';
+}
+
+export type RegisterPayload = {
+  email: string;
+  password: string;
+  first_name: string;
+  last_name: string;
+  dob: string;
+  nickname?: string;
+};
+
+export type Group = {
+  id: string;
+  creator_id: string;
+  title: string;
+  description: string;
+  created_at: string;
+};
+
+export const authAPI = {
+  register(payload: RegisterPayload) {
+    return request('/api/auth/register', {
+      method: 'POST',
+      body: payload,
+    });
+  },
+};
+
+export const groupAPI = {
+  getGroups() {
+    return request<Group[] | { groups?: Group[] }>('/api/groups');
+  },
+};
