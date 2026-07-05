@@ -285,3 +285,36 @@ export type SendMessagePayload = {
 	receiver_id: string;
 	content: string;
 };
+
+export const chatAPI = {
+	// List all conversations for the current user, most recent first.
+	getConversations() {
+		return request<ConversationListResponse | ChatConversation[]>('/api/chat/conversations');
+	},
+
+	// Message history with a specific user.
+	getMessages(userId: string, limit?: number, offset?: number) {
+		const params = new URLSearchParams();
+		if (limit !== undefined) params.set('limit', String(limit));
+		if (offset !== undefined) params.set('offset', String(offset));
+		const query = params.toString();
+		return request<ChatMessageListResponse | ChatMessage[]>(
+			`/api/chat/messages/${userId}${query ? `?${query}` : ''}`
+		);
+	},
+
+	// Send a message; the backend broadcasts it over WebSocket to the receiver.
+	sendMessage(payload: SendMessagePayload) {
+		return request<ChatMessage>('/api/chat/messages', {
+			method: 'POST',
+			body: payload,
+		});
+	},
+
+	// Mark all messages from a user as read.
+	markConversationRead(userId: string) {
+		return request<void>(`/api/chat/conversations/${userId}/read`, {
+			method: 'POST',
+		});
+	},
+};
