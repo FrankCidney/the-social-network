@@ -62,7 +62,7 @@ func TestCreateComment(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "failure_empty_content_and_image",
+			name: "success_empty_content_reserved_for_image_upload",
 			setup: func(t *testing.T, userRepo UserRepository, postRepo PostRepository, commentRepo CommentRepository) {
 				createTestUser(t, userRepo, "user-1", "user1@example.com")
 				p := &models.Post{ID: "post-1", UserID: "user-1", Content: "Post content", Privacy: models.PrivacyPublic}
@@ -78,7 +78,7 @@ func TestCreateComment(t *testing.T) {
 				ImageURL:  "",
 				CreatedAt: "2026-06-30T12:00:00Z",
 			},
-			wantErr: true, // CHECK constraint: content IS NOT NULL OR image_url IS NOT NULL
+			wantErr: false,
 		},
 		{
 			name: "failure_foreign_key_post_id",

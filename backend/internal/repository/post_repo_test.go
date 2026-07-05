@@ -68,7 +68,7 @@ func TestCreatePost(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "failure_empty_content_and_image",
+			name: "success_empty_content_reserved_for_image_upload",
 			setup: func(t *testing.T, db *sql.DB, userRepo UserRepository) {
 				createTestUser(t, userRepo, "user-1", "user1@example.com")
 			},
@@ -80,7 +80,7 @@ func TestCreatePost(t *testing.T) {
 				Privacy:   models.PrivacyPublic,
 				CreatedAt: "2026-06-30T12:00:00Z",
 			},
-			wantErr: true, // CHECK constraint: content IS NOT NULL OR image_url IS NOT NULL
+			wantErr: false,
 		},
 		{
 			name: "failure_group_post_without_group_id",

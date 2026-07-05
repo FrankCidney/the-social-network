@@ -37,7 +37,14 @@ type CommentThreadState = {
 	loaded: boolean;
 	open: boolean;
 	draft: string;
+	draftImageFile: File | null;
+	draftImagePreviewUrl: string | null;
 	submitting: boolean;
+	replyParentId: string | null;
+	replyDraft: string;
+	replyImageFile: File | null;
+	replyImagePreviewUrl: string | null;
+	replySubmitting: boolean;
 };
 
 const PRIVACY_OPTIONS: Array<{
@@ -70,7 +77,14 @@ function getInitialCommentThreadState(): CommentThreadState {
 		loaded: false,
 		open: false,
 		draft: '',
+		draftImageFile: null,
+		draftImagePreviewUrl: null,
 		submitting: false,
+		replyParentId: null,
+		replyDraft: '',
+		replyImageFile: null,
+		replyImagePreviewUrl: null,
+		replySubmitting: false,
 	};
 }
 
@@ -356,11 +370,111 @@ export default function FeedPage() {
 		}));
 	};
 
+	const handleCommentImageSelection = (
+		postId: string,
+		event: React.ChangeEvent<HTMLInputElement>
+	) => {
+		const nextFile = event.target.files?.[0] ?? null;
+		const nextPreviewUrl = nextFile ? URL.createObjectURL(nextFile) : null;
+
+		setCommentThreadState(postId, (current) => {
+			if (current.draftImagePreviewUrl) {
+				URL.revokeObjectURL(current.draftImagePreviewUrl);
+			}
+
+			return {
+				...current,
+				draftImageFile: nextFile,
+				draftImagePreviewUrl: nextPreviewUrl,
+				error: null,
+			};
+		});
+
+		event.target.value = '';
+	};
+
+	const clearCommentImage = (postId: string) => {
+		setCommentThreadState(postId, (current) => {
+			if (current.draftImagePreviewUrl) {
+				URL.revokeObjectURL(current.draftImagePreviewUrl);
+			}
+
+			return {
+				...current,
+				draftImageFile: null,
+				draftImagePreviewUrl: null,
+			};
+		});
+	};
+
+	const toggleReplyComposer = (postId: string, parentCommentId: string) => {
+		setCommentThreadState(postId, (current) => {
+			const isClosing = current.replyParentId === parentCommentId;
+			if (isClosing && current.replyImagePreviewUrl) {
+				URL.revokeObjectURL(current.replyImagePreviewUrl);
+			}
+
+			return {
+				...current,
+				replyParentId: isClosing ? null : parentCommentId,
+				replyDraft: isClosing ? '' : current.replyDraft,
+				replyImageFile: isClosing ? null : current.replyImageFile,
+				replyImagePreviewUrl: isClosing ? null : current.replyImagePreviewUrl,
+				error: null,
+			};
+		});
+	};
+
+	const handleReplyDraftChange = (postId: string, value: string) => {
+		setCommentThreadState(postId, (current) => ({
+			...current,
+			replyDraft: value,
+			error: null,
+		}));
+	};
+
+	const handleReplyImageSelection = (
+		postId: string,
+		event: React.ChangeEvent<HTMLInputElement>
+	) => {
+		const nextFile = event.target.files?.[0] ?? null;
+		const nextPreviewUrl = nextFile ? URL.createObjectURL(nextFile) : null;
+
+		setCommentThreadState(postId, (current) => {
+			if (current.replyImagePreviewUrl) {
+				URL.revokeObjectURL(current.replyImagePreviewUrl);
+			}
+
+			return {
+				...current,
+				replyImageFile: nextFile,
+				replyImagePreviewUrl: nextPreviewUrl,
+				error: null,
+			};
+		});
+
+		event.target.value = '';
+	};
+
+	const clearReplyImage = (postId: string) => {
+		setCommentThreadState(postId, (current) => {
+			if (current.replyImagePreviewUrl) {
+				URL.revokeObjectURL(current.replyImagePreviewUrl);
+			}
+
+			return {
+				...current,
+				replyImageFile: null,
+				replyImagePreviewUrl: null,
+			};
+		});
+	};
+
 	const handleCreateComment = async (postId: string) => {
 		const thread = commentThreads[postId] ?? getInitialCommentThreadState();
 		const trimmedDraft = thread.draft.trim();
 
-		if (!trimmedDraft) {
+		if (!trimmedDraft && !thread.draftImageFile) {
 			setCommentThreadState(postId, (current) => ({
 				...current,
 				error: 'Write a comment before posting.',
@@ -375,16 +489,27 @@ export default function FeedPage() {
 		}));
 
 		try {
-			await feedAPI.createComment(postId, {
+			const createdComment = await feedAPI.createComment(postId, {
 				content: trimmedDraft,
 			});
+
+			if (thread.draftImageFile) {
+				await feedAPI.uploadCommentImage(createdComment.id, thread.draftImageFile);
+			}
 
 			const items = await feedAPI.getComments(postId);
 			setCommentThreadState(postId, (current) => ({
 				...current,
 				items,
 				draft: '',
+				draftImageFile: null,
+				draftImagePreviewUrl: null,
 				submitting: false,
+				replyParentId: null,
+				replyDraft: '',
+				replyImageFile: null,
+				replyImagePreviewUrl: null,
+				replySubmitting: false,
 				error: null,
 				loaded: true,
 				open: true,
@@ -394,6 +519,56 @@ export default function FeedPage() {
 				...current,
 				submitting: false,
 				error: err instanceof Error ? err.message : 'Failed to post comment',
+			}));
+		}
+	};
+
+	const handleCreateReply = async (postId: string, parentCommentId: string) => {
+		const thread = commentThreads[postId] ?? getInitialCommentThreadState();
+		const trimmedDraft = thread.replyDraft.trim();
+
+		if (!trimmedDraft && !thread.replyImageFile) {
+			setCommentThreadState(postId, (current) => ({
+				...current,
+				error: 'Write a reply before posting.',
+			}));
+			return;
+		}
+
+		setCommentThreadState(postId, (current) => ({
+			...current,
+			replySubmitting: true,
+			error: null,
+		}));
+
+		try {
+			const createdReply = await feedAPI.createComment(postId, {
+				content: trimmedDraft,
+				parent_comment_id: parentCommentId,
+			});
+
+			if (thread.replyImageFile) {
+				await feedAPI.uploadCommentImage(createdReply.id, thread.replyImageFile);
+			}
+
+			const items = await feedAPI.getComments(postId);
+			setCommentThreadState(postId, (current) => ({
+				...current,
+				items,
+				replyParentId: null,
+				replyDraft: '',
+				replyImageFile: null,
+				replyImagePreviewUrl: null,
+				replySubmitting: false,
+				error: null,
+				loaded: true,
+				open: true,
+			}));
+		} catch (err) {
+			setCommentThreadState(postId, (current) => ({
+				...current,
+				replySubmitting: false,
+				error: err instanceof Error ? err.message : 'Failed to post reply',
 			}));
 		}
 	};
@@ -419,8 +594,10 @@ export default function FeedPage() {
 		);
 	};
 
-	const renderCommentNode = (comment: CommentResponse) => {
+	const renderCommentNode = (postId: string, comment: CommentResponse) => {
 		const commentImageUrl = resolveAssetUrl(comment.image_url);
+		const thread = commentThreads[postId] ?? getInitialCommentThreadState();
+		const isReplyComposerOpen = thread.replyParentId === comment.id;
 
 		return (
 			<div key={comment.id} className="space-y-3">
@@ -452,11 +629,106 @@ export default function FeedPage() {
 									className="mt-3 w-full max-h-72 rounded-xl border border-gray-100 object-cover bg-white"
 								/>
 							)}
+
+							<div className="mt-3">
+								<button
+									type="button"
+									onClick={() => toggleReplyComposer(postId, comment.id)}
+									className="text-xs font-semibold text-gray-500 hover:text-indigo-600 transition-colors"
+									disabled={thread.replySubmitting}
+								>
+									Reply
+								</button>
+							</div>
 						</div>
+
+						{isReplyComposerOpen && (
+							<div className="mt-3 ml-4 rounded-xl border border-gray-100 bg-white p-3 space-y-3">
+								<textarea
+									value={thread.replyDraft}
+									onChange={(event) =>
+										handleReplyDraftChange(postId, event.target.value)
+									}
+									placeholder={`Reply to ${comment.author.first_name}...`}
+									rows={2}
+									className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+									disabled={thread.replySubmitting}
+								/>
+								{thread.replyImagePreviewUrl && (
+									<div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+										<div className="flex items-start justify-between gap-3 mb-3">
+											<div>
+												<p className="text-sm font-semibold text-gray-800">
+													Selected image
+												</p>
+												<p className="text-xs text-gray-500">
+													{thread.replyImageFile?.name}
+												</p>
+											</div>
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												className="rounded-full w-9 p-0 text-gray-500"
+												onClick={() => clearReplyImage(postId)}
+												disabled={thread.replySubmitting}
+											>
+												<X className="w-4 h-4" />
+											</Button>
+										</div>
+										<img
+											src={thread.replyImagePreviewUrl}
+											alt="Selected reply preview"
+											className="w-full max-h-72 rounded-xl border border-gray-100 object-cover"
+										/>
+									</div>
+								)}
+								<div className="flex items-center justify-end gap-2">
+									<label className="inline-flex cursor-pointer items-center justify-center rounded-bento bg-transparent px-3 py-1.5 text-sm font-medium text-text-main transition-colors hover:bg-gray-100 focus-within:ring-2 focus-within:ring-primary">
+										<input
+											type="file"
+											accept="image/*"
+											className="hidden"
+											onChange={(event) => handleReplyImageSelection(postId, event)}
+											disabled={thread.replySubmitting}
+										/>
+										<ImageIcon className="w-4 h-4 mr-2 text-gray-400" />
+										Add Image
+									</label>
+									<Button
+										type="button"
+										variant="secondary"
+										size="sm"
+										className="rounded-full"
+										onClick={() => toggleReplyComposer(postId, comment.id)}
+										disabled={thread.replySubmitting}
+									>
+										Cancel
+									</Button>
+									<Button
+										type="button"
+										variant="primary"
+										size="sm"
+										className="rounded-full px-5"
+										onClick={() => void handleCreateReply(postId, comment.id)}
+										disabled={thread.replySubmitting}
+									>
+										{thread.replySubmitting ? (
+											<>
+												<LoaderCircle className="w-4 h-4 mr-2 animate-spin" />
+												Replying...
+											</>
+										) : (
+											'Reply'
+										)}
+									</Button>
+								</div>
+							</div>
+						)}
 
 						{comment.replies.length > 0 && (
 							<div className="mt-3 ml-4 pl-4 border-l border-gray-200 space-y-3">
-								{comment.replies.map(renderCommentNode)}
+								{comment.replies.map((reply) => renderCommentNode(postId, reply))}
 							</div>
 						)}
 					</div>
@@ -909,6 +1181,35 @@ export default function FeedPage() {
 													className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
 													disabled={thread.submitting}
 												/>
+												{thread.draftImagePreviewUrl && (
+													<div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+														<div className="flex items-start justify-between gap-3 mb-3">
+															<div>
+																<p className="text-sm font-semibold text-gray-800">
+																	Selected image
+																</p>
+																<p className="text-xs text-gray-500">
+																	{thread.draftImageFile?.name}
+																</p>
+															</div>
+															<Button
+																type="button"
+																variant="ghost"
+																size="sm"
+																className="rounded-full w-9 p-0 text-gray-500"
+																onClick={() => clearCommentImage(post.id)}
+																disabled={thread.submitting}
+															>
+																<X className="w-4 h-4" />
+															</Button>
+														</div>
+														<img
+															src={thread.draftImagePreviewUrl}
+															alt="Selected comment preview"
+															className="w-full max-h-72 rounded-xl border border-gray-100 object-cover"
+														/>
+													</div>
+												)}
 												<div className="flex items-center justify-between gap-3">
 													{thread.error ? (
 														<p className="text-sm text-red-600">{thread.error}</p>
@@ -917,23 +1218,36 @@ export default function FeedPage() {
 															Comments follow the post&apos;s visibility settings.
 														</span>
 													)}
-													<Button
-														type="button"
-														variant="primary"
-														size="sm"
-														className="rounded-full px-5"
-														onClick={() => void handleCreateComment(post.id)}
-														disabled={thread.submitting}
-													>
-														{thread.submitting ? (
-															<>
-																<LoaderCircle className="w-4 h-4 mr-2 animate-spin" />
-																Posting...
-															</>
-														) : (
-															'Comment'
-														)}
-													</Button>
+													<div className="flex items-center gap-2">
+														<label className="inline-flex cursor-pointer items-center justify-center rounded-bento bg-transparent px-3 py-1.5 text-sm font-medium text-text-main transition-colors hover:bg-gray-100 focus-within:ring-2 focus-within:ring-primary">
+															<input
+																type="file"
+																accept="image/*"
+																className="hidden"
+																onChange={(event) => handleCommentImageSelection(post.id, event)}
+																disabled={thread.submitting}
+															/>
+															<ImageIcon className="w-4 h-4 mr-2 text-gray-400" />
+															Add Image
+														</label>
+														<Button
+															type="button"
+															variant="primary"
+															size="sm"
+															className="rounded-full px-5"
+															onClick={() => void handleCreateComment(post.id)}
+															disabled={thread.submitting}
+														>
+															{thread.submitting ? (
+																<>
+																	<LoaderCircle className="w-4 h-4 mr-2 animate-spin" />
+																	Posting...
+																</>
+															) : (
+																'Comment'
+															)}
+														</Button>
+													</div>
 												</div>
 											</div>
 										</div>
@@ -950,9 +1264,9 @@ export default function FeedPage() {
 											</div>
 										) : (
 											<div className="space-y-4">
-												{thread.items.map(renderCommentNode)}
-											</div>
-										)}
+													{thread.items.map((comment) => renderCommentNode(post.id, comment))}
+												</div>
+											)}
 									</div>
 								)}
 							</motion.div>

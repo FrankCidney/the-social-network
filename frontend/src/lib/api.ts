@@ -140,7 +140,21 @@ export type CreateCommentPayload = {
 	parent_comment_id?: string;
 };
 
+export type CreatedCommentResponse = {
+	id: string;
+	post_id: string;
+	user_id: string;
+	content?: string;
+	image_url?: string;
+	parent_comment_id?: string;
+	created_at: string;
+};
+
 export type UploadPostImageResponse = {
+	image_url: string;
+};
+
+export type UploadCommentImageResponse = {
 	image_url: string;
 };
 
@@ -232,9 +246,19 @@ export const feedAPI = {
 	},
 
 	createComment(postId: string, payload: CreateCommentPayload) {
-		return request(`/api/posts/${postId}/comments`, {
+		return request<CreatedCommentResponse>(`/api/posts/${postId}/comments`, {
 			method: 'POST',
 			body: payload,
+		});
+	},
+
+	uploadCommentImage(commentId: string, file: File) {
+		const formData = new FormData();
+		formData.append('image', file);
+
+		return request<UploadCommentImageResponse>(`/api/comments/${commentId}/image`, {
+			method: 'POST',
+			body: formData,
 		});
 	},
 };

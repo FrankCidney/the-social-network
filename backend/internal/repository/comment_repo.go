@@ -30,7 +30,7 @@ func (r *sqliteCommentRepo) CreateComment(c *models.Comment) error {
 		VALUES (?, ?, ?, ?, ?, ?, ?)`
  
 	_, err := r.db.Exec(query,
-		c.ID, c.PostID, c.UserID, nullableString(c.Content), nullableString(c.ImageURL), c.ParentCommentID, c.CreatedAt,
+		c.ID, c.PostID, c.UserID, c.Content, nullableString(c.ImageURL), c.ParentCommentID, c.CreatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("create comment: %w", err)
