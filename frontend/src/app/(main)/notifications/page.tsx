@@ -73,3 +73,146 @@ function getNotificationIcon(type: string) {
       return <Bell className="w-5 h-5 text-slate-600" />;
   }
 }
+
+export default function NotificationsPage() {
+  const { socket, isConnected } = useWebSocket();
+  const [notifications, setNotifications] = React.useState<NotificationItem[]>([
+    {
+      id: 'welcome-notification',
+      type: 'notification',
+      actor_id: 'system',
+      created_at: new Date().toISOString(),
+      is_read: false,
+      message: 'Your inbox is ready. Live updates from the app will appear here.',
+    },
+  ]);
+
+  React.useEffect(() => {
+    if (!socket) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (
+          data.type === 'notification' ||
+          data.type === 'follow_request' ||
+          data.type === 'group_invite' ||
+          data.type === 'group_event'
+        ) {
+          const payload = data.payload as NotificationItem;
+          setNotifications((prev) => [
+            {
+              ...payload,
+              message: payload.message ?? getNotificationDescription(payload.type, payload.actor_id),
+            },
+            ...prev,
+          ]);
+        }
+      } catch (err) {
+        console.error('Failed to parse notification payload', err);
+      }
+    };
+
+    socket.addEventListener('message', handleMessage);
+    return () => socket.removeEventListener('message', handleMessage);
+  }, [socket]);
+
+  const unreadCount = notifications.filter((item) => !item.is_read).length;
+
+  const markAllAsRead = () => {
+    setNotifications((prev) => prev.map((item) => ({ ...item, is_read: true })));
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl border border-gray-100 p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
+              <div className="p-2 bg-amber-100 rounded-lg">
+                <Bell className="w-6 h-6 text-amber-600" />
+              </div>
+              Notifications
+            </h1>
+            <p className="text-gray-500 text-sm mt-2">
+              Keep track of follow requests, group invites, and other recent activity in one place.
+            </p>
+          </div>
+
+          <button
+            onClick={markAllAsRead}
+            className="inline-flex items-center gap-2 rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            Mark all read
+          </button>
+        </div>
+
+        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <p className="text-sm text-gray-500">Unread</p>
+            <p className="mt-2 text-2xl font-semibold text-gray-900">{unreadCount}</p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <p className="text-sm text-gray-500">Live updates</p>
+            <p className="mt-2 text-2xl font-semibold text-gray-900">{isConnected ? 'On' : 'Connecting'}</p>
+          </div>
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+            <p className="text-sm text-gray-500">Total</p>
+            <p className="mt-2 text-2xl font-semibold text-gray-900">{notifications.length}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {notifications.length === 0 ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="bg-white rounded-xl border border-gray-100 p-12 text-center"
+          >
+            <Bell className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-bold text-gray-900 mb-2">No notifications yet</h3>
+            <p className="text-gray-500 text-sm">
+              New activity will appear here as soon as the app sends it.
+            </p>
+          </motion.div>
+        ) : (
+          notifications.map((notification, index) => (
+            <motion.div
+              key={notification.id}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.04 }}
+              className={`rounded-xl border p-4 transition-colors ${
+                notification.is_read
+                  ? 'border-gray-100 bg-white'
+                  : 'border-indigo-100 bg-indigo-50/70'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 rounded-full bg-white p-2 shadow-sm">
+                  {getNotificationIcon(notification.type)}
+                </div>
+                <div className="flex-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-gray-900">{getNotificationTitle(notification.type)}</p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        {notification.message ?? getNotificationDescription(notification.type, notification.actor_id)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <Clock3 className="w-3.5 h-3.5" />
+                      {formatTimestamp(notification.created_at)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
