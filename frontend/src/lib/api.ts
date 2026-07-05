@@ -251,3 +251,37 @@ export function resolveAssetUrl(path?: string) {
 	const normalizedPath = path.startsWith('/') ? path : `/${path}`;
 	return API_BASE_URL ? `${API_BASE_URL}${normalizedPath}` : normalizedPath;
 }
+// Chat / Messaging API 
+// Conversations are keyed by the *other* user's id (1:1 chat), matching the
+// Yoh can be adjusted if the backend differs
+
+export type ChatMessage = {
+	id: string;
+	sender_id: string;
+	receiver_id: string;
+	content: string;
+	created_at: string;
+	read_at?: string;
+};
+
+export type ChatConversation = {
+	user: PublicUser;
+	last_message?: ChatMessage;
+	unread_count: number;
+};
+
+export type ConversationListResponse = {
+	conversations: ChatConversation[];
+};
+
+export type ChatMessageListResponse = {
+	messages: ChatMessage[];
+	total: number;
+	limit: number;
+	offset: number;
+};
+
+export type SendMessagePayload = {
+	receiver_id: string;
+	content: string;
+};
