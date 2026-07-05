@@ -118,11 +118,26 @@ export type FollowListResponse = {
 	offset: number;
 };
 
+export type CommentResponse = {
+	id: string;
+	author: PublicUser;
+	content?: string;
+	image_url?: string;
+	depth: number;
+	created_at: string;
+	replies: CommentResponse[];
+};
+
 export type CreatePostPayload = {
 	content?: string;
 	privacy: string;
 	visible_to?: string[];
 	group_id?: string;
+};
+
+export type CreateCommentPayload = {
+	content?: string;
+	parent_comment_id?: string;
 };
 
 export type UploadPostImageResponse = {
@@ -209,6 +224,17 @@ export const feedAPI = {
 		return request<UploadPostImageResponse>(`/api/posts/${postId}/image`, {
 			method: 'POST',
 			body: formData,
+		});
+	},
+
+	getComments(postId: string) {
+		return request<CommentResponse[]>(`/api/posts/${postId}/comments`);
+	},
+
+	createComment(postId: string, payload: CreateCommentPayload) {
+		return request(`/api/posts/${postId}/comments`, {
+			method: 'POST',
+			body: payload,
 		});
 	},
 };

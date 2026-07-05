@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import {
+	CommentResponse,
 	feedAPI,
 	FollowListResponse,
 	PostListResponse,
@@ -28,6 +29,16 @@ const DEFAULT_FEED_LIMIT = 20;
 const FOLLOWERS_PAGE_SIZE = 20;
 
 type PostPrivacy = 'public' | 'almost_private' | 'private';
+
+type CommentThreadState = {
+	items: CommentResponse[];
+	loading: boolean;
+	error: string | null;
+	loaded: boolean;
+	open: boolean;
+	draft: string;
+	submitting: boolean;
+};
 
 const PRIVACY_OPTIONS: Array<{
 	value: PostPrivacy;
@@ -51,6 +62,22 @@ const PRIVACY_OPTIONS: Array<{
 	},
 ];
 
+function getInitialCommentThreadState(): CommentThreadState {
+	return {
+		items: [],
+		loading: false,
+		error: null,
+		loaded: false,
+		open: false,
+		draft: '',
+		submitting: false,
+	};
+}
+
+function countComments(items: CommentResponse[]): number {
+	return items.reduce((total, item) => total + 1 + countComments(item.replies), 0);
+}
+
 export default function FeedPage() {
 	const [feedData, setFeedData] = React.useState<PostListResponse | null>(null);
 	const [loading, setLoading] = React.useState(true);
@@ -69,22 +96,8 @@ export default function FeedPage() {
 	const [followersLoading, setFollowersLoading] = React.useState(false);
 	const [followersError, setFollowersError] = React.useState<string | null>(null);
 	const [followersInitialized, setFollowersInitialized] = React.useState(false);
+	const [commentThreads, setCommentThreads] = React.useState<Record<string, CommentThreadState>>({});
 	const fileInputRef = React.useRef<HTMLInputElement | null>(null);
-
-	const fetchFeed = async () => {
-		setLoading(true);
-		setFeedError(null);
-		try {
-			const data = await feedAPI.getFeed(DEFAULT_FEED_LIMIT, 0);
-			setFeedData(data);
-		} catch (err) {
-			setFeedError(
-				err instanceof Error ? err.message : 'Failed to load feed'
-			);
-		} finally {
-			setLoading(false);
-		}
-	};
 
 	React.useEffect(() => {
 		const loadInitialData = async () => {
@@ -285,6 +298,173 @@ export default function FeedPage() {
 		}
 	};
 
+	const setCommentThreadState = (
+		postId: string,
+		updater: (current: CommentThreadState) => CommentThreadState
+	) => {
+		setCommentThreads((current) => ({
+			...current,
+			[postId]: updater(current[postId] ?? getInitialCommentThreadState()),
+		}));
+	};
+
+	const loadComments = async (postId: string) => {
+		setCommentThreadState(postId, (current) => ({
+			...current,
+			loading: true,
+			error: null,
+		}));
+
+		try {
+			const items = await feedAPI.getComments(postId);
+			setCommentThreadState(postId, (current) => ({
+				...current,
+				items,
+				loading: false,
+				error: null,
+				loaded: true,
+			}));
+		} catch (err) {
+			setCommentThreadState(postId, (current) => ({
+				...current,
+				loading: false,
+				error: err instanceof Error ? err.message : 'Failed to load comments',
+				loaded: current.loaded,
+			}));
+		}
+	};
+
+	const toggleComments = async (postId: string) => {
+		const thread = commentThreads[postId] ?? getInitialCommentThreadState();
+		const nextOpen = !thread.open;
+
+		setCommentThreadState(postId, (current) => ({
+			...current,
+			open: nextOpen,
+		}));
+
+		if (nextOpen && !thread.loaded && !thread.loading) {
+			await loadComments(postId);
+		}
+	};
+
+	const handleCommentDraftChange = (postId: string, value: string) => {
+		setCommentThreadState(postId, (current) => ({
+			...current,
+			draft: value,
+			error: null,
+		}));
+	};
+
+	const handleCreateComment = async (postId: string) => {
+		const thread = commentThreads[postId] ?? getInitialCommentThreadState();
+		const trimmedDraft = thread.draft.trim();
+
+		if (!trimmedDraft) {
+			setCommentThreadState(postId, (current) => ({
+				...current,
+				error: 'Write a comment before posting.',
+			}));
+			return;
+		}
+
+		setCommentThreadState(postId, (current) => ({
+			...current,
+			submitting: true,
+			error: null,
+		}));
+
+		try {
+			await feedAPI.createComment(postId, {
+				content: trimmedDraft,
+			});
+
+			const items = await feedAPI.getComments(postId);
+			setCommentThreadState(postId, (current) => ({
+				...current,
+				items,
+				draft: '',
+				submitting: false,
+				error: null,
+				loaded: true,
+				open: true,
+			}));
+		} catch (err) {
+			setCommentThreadState(postId, (current) => ({
+				...current,
+				submitting: false,
+				error: err instanceof Error ? err.message : 'Failed to post comment',
+			}));
+		}
+	};
+
+	const renderAvatar = (user?: PublicUser) => {
+		const avatarUrl = resolveAssetUrl(user?.avatar_path);
+		const initials = `${user?.first_name?.[0] ?? ''}${user?.last_name?.[0] ?? ''}`.trim() || 'Y';
+
+		if (avatarUrl) {
+			return (
+				<img
+					src={avatarUrl}
+					alt={user ? `${user.first_name} ${user.last_name}` : 'User avatar'}
+					className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+				/>
+			);
+		}
+
+		return (
+			<div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 text-sm font-semibold flex items-center justify-center flex-shrink-0">
+				{initials}
+			</div>
+		);
+	};
+
+	const renderCommentNode = (comment: CommentResponse) => {
+		const commentImageUrl = resolveAssetUrl(comment.image_url);
+
+		return (
+			<div key={comment.id} className="space-y-3">
+				<div className="flex gap-3">
+					{renderAvatar(comment.author)}
+					<div className="flex-1 min-w-0">
+						<div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+							<div className="flex items-center justify-between gap-3 mb-2">
+								<div className="min-w-0">
+									<p className="text-sm font-semibold text-gray-800 truncate">
+										{comment.author.first_name} {comment.author.last_name}
+									</p>
+									<p className="text-xs text-gray-500">
+										{formatDate(comment.created_at)}
+									</p>
+								</div>
+							</div>
+
+							{comment.content && (
+								<p className="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap">
+									{comment.content}
+								</p>
+							)}
+
+							{commentImageUrl && (
+								<img
+									src={commentImageUrl}
+									alt="Comment image"
+									className="mt-3 w-full max-h-72 rounded-xl border border-gray-100 object-cover bg-white"
+								/>
+							)}
+						</div>
+
+						{comment.replies.length > 0 && (
+							<div className="mt-3 ml-4 pl-4 border-l border-gray-200 space-y-3">
+								{comment.replies.map(renderCommentNode)}
+							</div>
+						)}
+					</div>
+				</div>
+			</div>
+		);
+	};
+
 	const handleCreatePost = async (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 
@@ -337,27 +517,6 @@ export default function FeedPage() {
 		} finally {
 			setIsSubmitting(false);
 		}
-	};
-
-	const renderAvatar = (user?: PublicUser) => {
-		const avatarUrl = resolveAssetUrl(user?.avatar_path);
-		const initials = `${user?.first_name?.[0] ?? ''}${user?.last_name?.[0] ?? ''}`.trim() || 'Y';
-
-		if (avatarUrl) {
-			return (
-				<img
-					src={avatarUrl}
-					alt={user ? `${user.first_name} ${user.last_name}` : 'User avatar'}
-					className="w-10 h-10 rounded-full object-cover flex-shrink-0"
-				/>
-			);
-		}
-
-		return (
-			<div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 text-sm font-semibold flex items-center justify-center flex-shrink-0">
-				{initials}
-			</div>
-		);
 	};
 
 	const hasMoreFollowers =
@@ -671,6 +830,12 @@ export default function FeedPage() {
 				<>
 					{feedData.posts.map((post) => {
 						const postImageUrl = resolveAssetUrl(post.image_url);
+						const thread = commentThreads[post.id] ?? getInitialCommentThreadState();
+						const commentCount = countComments(thread.items);
+						const commentLabel =
+							thread.loaded && commentCount > 0
+								? `${commentCount} comment${commentCount === 1 ? '' : 's'}`
+								: 'Comment';
 
 						return (
 							<motion.div
@@ -698,7 +863,7 @@ export default function FeedPage() {
 
 								{post.content && (
 									<div className="px-4 pb-4">
-										<p className="text-sm leading-relaxed text-gray-800">
+										<p className="text-sm leading-relaxed text-gray-800 whitespace-pre-wrap">
 											{post.content}
 										</p>
 									</div>
@@ -715,15 +880,81 @@ export default function FeedPage() {
 								)}
 
 								<div className="px-4 py-3 bg-gray-50/50 border-t border-gray-100 flex items-center gap-6">
-									<button className="flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-indigo-600 transition-colors">
+									<button
+										type="button"
+										onClick={() => void toggleComments(post.id)}
+										className="flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-indigo-600 transition-colors"
+									>
 										<MessageCircle className="w-4 h-4" />
-										Comment
+										{commentLabel}
 									</button>
 									<button className="flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-indigo-600 transition-colors">
 										<Share2 className="w-4 h-4" />
 										Share
 									</button>
 								</div>
+
+								{thread.open && (
+									<div className="border-t border-gray-100 bg-white px-4 py-4 space-y-4">
+										<div className="flex gap-3">
+											{renderAvatar(currentUser ?? undefined)}
+											<div className="flex-1 space-y-3">
+												<textarea
+													value={thread.draft}
+													onChange={(event) =>
+														handleCommentDraftChange(post.id, event.target.value)
+													}
+													placeholder="Write a comment..."
+													rows={3}
+													className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+													disabled={thread.submitting}
+												/>
+												<div className="flex items-center justify-between gap-3">
+													{thread.error ? (
+														<p className="text-sm text-red-600">{thread.error}</p>
+													) : (
+														<span className="text-xs text-gray-500">
+															Comments follow the post&apos;s visibility settings.
+														</span>
+													)}
+													<Button
+														type="button"
+														variant="primary"
+														size="sm"
+														className="rounded-full px-5"
+														onClick={() => void handleCreateComment(post.id)}
+														disabled={thread.submitting}
+													>
+														{thread.submitting ? (
+															<>
+																<LoaderCircle className="w-4 h-4 mr-2 animate-spin" />
+																Posting...
+															</>
+														) : (
+															'Comment'
+														)}
+													</Button>
+												</div>
+											</div>
+										</div>
+
+										{thread.loading && !thread.loaded ? (
+											<div className="flex items-center justify-center py-6">
+												<LoaderCircle className="w-5 h-5 text-indigo-600 animate-spin" />
+											</div>
+										) : thread.loaded && thread.items.length === 0 ? (
+											<div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-6 text-center">
+												<p className="text-sm text-gray-500">
+													No comments yet. Start the conversation.
+												</p>
+											</div>
+										) : (
+											<div className="space-y-4">
+												{thread.items.map(renderCommentNode)}
+											</div>
+										)}
+									</div>
+								)}
 							</motion.div>
 						);
 					})}
