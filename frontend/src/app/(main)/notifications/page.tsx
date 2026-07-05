@@ -4,6 +4,7 @@ import * as React from 'react';
 import { motion } from 'framer-motion';
 import { Bell, CheckCircle2, Clock3, MessageSquare, Sparkles, Users } from 'lucide-react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { notificationsAPI, NotificationItem, NotificationListResponse } from '@/lib/api';
 
 type NotificationItem = {
   id: string;
@@ -76,16 +77,25 @@ function getNotificationIcon(type: string) {
 
 export default function NotificationsPage() {
   const { socket, isConnected } = useWebSocket();
-  const [notifications, setNotifications] = React.useState<NotificationItem[]>([
-    {
-      id: 'welcome-notification',
-      type: 'notification',
-      actor_id: 'system',
-      created_at: new Date().toISOString(),
-      is_read: false,
-      message: 'Your inbox is ready. Live updates from the app will appear here.',
-    },
-  ]);
+
+  const [notifications, setNotifications] = React.useState<NotificationItem[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [markingAll, setMarkingAll] = React.useState(false);
+
+  const loadNotifications = React.useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await notificationsAPI.getNotifications();
+      setNotifications(unwrapNotifications(data));
+      setError(null);
+    } catch (err) {
+      console.error('Failed to load notifications', err);
+      setError('Could not load your notifications.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   React.useEffect(() => {
     if (!socket) return;
@@ -119,9 +129,22 @@ export default function NotificationsPage() {
 
   const unreadCount = notifications.filter((item) => !item.is_read).length;
 
-  const markAllAsRead = () => {
+   const markAllAsRead = async () => {
+    if (unreadCount === 0) return;
+    const previous = notifications;
     setNotifications((prev) => prev.map((item) => ({ ...item, is_read: true })));
+    try {
+      setMarkingAll(true);
+      await notificationsAPI.markAllAsRead();
+    } catch (err) {
+      console.error('Failed to mark all as read', err);
+      setNotifications(previous);
+      setError('Could not mark everything as read. Please try again.');
+    } finally {
+      setMarkingAll(false);
+    }
   };
+
 
   return (
     <div className="space-y-6">
