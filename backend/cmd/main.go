@@ -73,7 +73,7 @@ func main() {
 	chatHandler := handlers.NewChatHandler(chatService)
 
 	// Routes
-	mux := routes.NewRouter(
+	apiMux := routes.NewRouter(
 		authHandler, 
 		userHandler, 
 		followHandler, 
@@ -84,6 +84,10 @@ func main() {
 		chatHandler,
 		authService,
 	)
+
+	mux := http.NewServeMux()
+	mux.Handle("/uploads/", http.StripPrefix("/", http.FileServer(http.Dir("."))))
+	mux.Handle("/", apiMux)
 
 	// Background cleanup
 	ctx, cancel := context.WithCancel(context.Background())

@@ -1,13 +1,14 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
 
 type RequestOptions = Omit<RequestInit, 'body'> & {
-  body?: unknown;
+  body?: BodyInit | Record<string, unknown> | unknown[];
 };
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
+  const isFormData = options.body instanceof FormData;
 
-  if (options.body !== undefined && !headers.has('content-type')) {
+  if (options.body !== undefined && !isFormData && !headers.has('content-type')) {
     headers.set('content-type', 'application/json');
   }
 
@@ -15,7 +16,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     ...options,
     headers,
     credentials: 'include',
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    body:
+      options.body === undefined
+        ? undefined
+        : isFormData
+          ? options.body
+          : JSON.stringify(options.body),
   });
 
   if (!response.ok) {
@@ -79,6 +85,43 @@ export type PublicUser = {
 	is_public: boolean;
 };
 
+export type PostResponse = {
+	id: string;
+	author: PublicUser;
+	group_id?: string;
+	content?: string;
+	image_url?: string;
+	privacy: string;
+	created_at: string;
+};
+
+export type PostListResponse = {
+	posts: PostResponse[];
+	total: number;
+	limit: number;
+	offset: number;
+};
+
+export type CreatePostPayload = {
+	content?: string;
+	privacy: string;
+	visible_to?: string[];
+	group_id?: string;
+};
+
+export type UploadPostImageResponse = {
+	image_url: string;
+};
+
+export type CreatedPostResponse = {
+	id: string;
+	group_id?: string;
+	content?: string;
+	image_url?: string;
+	privacy: string;
+	created_at: string;
+};
+
 export type Group = {
 	id: string;
 	creator_id: string;
@@ -104,7 +147,51 @@ export const authAPI = {
 };
 
 export const groupAPI = {
-  getGroups() {
-    return request<Group[] | { groups?: Group[] }>('/api/groups');
-  },
+	getGroups() {
+		return request<Group[] | { groups?: Group[] }>('/api/groups');
+	},
 };
+
+export const feedAPI = {
+	getFeed(limit?: number, offset?: number) {
+		const params = new URLSearchParams();
+		if (limit !== undefined) params.set('limit', String(limit));
+		if (offset !== undefined) params.set('offset', String(offset));
+		const query = params.toString();
+		return request<PostListResponse>(`/api/feed${query ? `?${query}` : ''}`);
+	},
+
+	createPost(payload: CreatePostPayload) {
+		return request<CreatedPostResponse>('/api/posts', {
+			method: 'POST',
+			body: payload,
+		});
+	},
+
+	getPost(postId: string) {
+		return request<PostResponse>(`/api/posts/${postId}`);
+	},
+
+	uploadPostImage(postId: string, file: File) {
+		const formData = new FormData();
+		formData.append('image', file);
+
+		return request<UploadPostImageResponse>(`/api/posts/${postId}/image`, {
+			method: 'POST',
+			body: formData,
+		});
+	},
+};
+
+export function resolveAssetUrl(path?: string) {
+	if (!path) {
+		return undefined;
+	}
+
+	if (/^https?:\/\//i.test(path)) {
+		return path;
+	}
+
+	const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+	return API_BASE_URL ? `${API_BASE_URL}${normalizedPath}` : normalizedPath;
+}

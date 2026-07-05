@@ -41,7 +41,7 @@ func (r *sqlitePostRepo) CreatePost(p *models.Post) error {
 		VALUES (?, ?, ?, ?, ?, ?, ?)`
 
 	_, err := r.db.Exec(query,
-		p.ID, p.UserID, p.GroupID, nullableString(p.Content), nullableString(p.ImageURL), p.Privacy, p.CreatedAt,
+		p.ID, p.UserID, p.GroupID, p.Content, nullableString(p.ImageURL), p.Privacy, p.CreatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("create post: %w", err)
