@@ -3,6 +3,8 @@
 import * as React from 'react';
 import { motion } from 'framer-motion';
 import {
+	Check,
+	ChevronDown,
 	FileText,
 	Image as ImageIcon,
 	LoaderCircle,
@@ -14,24 +16,59 @@ import {
 import { Button } from '@/components/ui/Button';
 import {
 	feedAPI,
+	FollowListResponse,
 	PostListResponse,
 	PostResponse,
+	profileAPI,
 	PublicUser,
 	resolveAssetUrl,
 } from '@/lib/api';
 
 const DEFAULT_FEED_LIMIT = 20;
+const FOLLOWERS_PAGE_SIZE = 20;
+
+type PostPrivacy = 'public' | 'almost_private' | 'private';
+
+const PRIVACY_OPTIONS: Array<{
+	value: PostPrivacy;
+	label: string;
+	description: string;
+}> = [
+	{
+		value: 'public',
+		label: 'Public',
+		description: 'Visible to everyone who can access your profile.',
+	},
+	{
+		value: 'almost_private',
+		label: 'Almost Private',
+		description: 'Visible to your followers only.',
+	},
+	{
+		value: 'private',
+		label: 'Private',
+		description: 'Visible only to followers you choose below.',
+	},
+];
 
 export default function FeedPage() {
 	const [feedData, setFeedData] = React.useState<PostListResponse | null>(null);
 	const [loading, setLoading] = React.useState(true);
 	const [feedError, setFeedError] = React.useState<string | null>(null);
+	const [currentUser, setCurrentUser] = React.useState<PublicUser | null>(null);
 	const [isComposerOpen, setIsComposerOpen] = React.useState(false);
 	const [draftContent, setDraftContent] = React.useState('');
+	const [postPrivacy, setPostPrivacy] = React.useState<PostPrivacy>('public');
+	const [selectedViewerIds, setSelectedViewerIds] = React.useState<string[]>([]);
 	const [selectedImage, setSelectedImage] = React.useState<File | null>(null);
 	const [imagePreviewUrl, setImagePreviewUrl] = React.useState<string | null>(null);
 	const [composerError, setComposerError] = React.useState<string | null>(null);
 	const [isSubmitting, setIsSubmitting] = React.useState(false);
+	const [followersData, setFollowersData] = React.useState<FollowListResponse | null>(null);
+	const [followers, setFollowers] = React.useState<PublicUser[]>([]);
+	const [followersLoading, setFollowersLoading] = React.useState(false);
+	const [followersError, setFollowersError] = React.useState<string | null>(null);
+	const [followersInitialized, setFollowersInitialized] = React.useState(false);
 	const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
 	const fetchFeed = async () => {
@@ -50,7 +87,27 @@ export default function FeedPage() {
 	};
 
 	React.useEffect(() => {
-		void fetchFeed();
+		const loadInitialData = async () => {
+			setLoading(true);
+			setFeedError(null);
+
+			try {
+				const [feed, profile] = await Promise.all([
+					feedAPI.getFeed(DEFAULT_FEED_LIMIT, 0),
+					profileAPI.getMyProfile(),
+				]);
+				setFeedData(feed);
+				setCurrentUser(profile.user);
+			} catch (err) {
+				setFeedError(
+					err instanceof Error ? err.message : 'Failed to load feed'
+				);
+			} finally {
+				setLoading(false);
+			}
+		};
+
+		void loadInitialData();
 	}, []);
 
 	React.useEffect(() => {
@@ -67,6 +124,75 @@ export default function FeedPage() {
 		};
 	}, [selectedImage]);
 
+	const loadFollowers = async (offset: number) => {
+		if (!currentUser) {
+			return;
+		}
+
+		setFollowersLoading(true);
+		setFollowersError(null);
+
+		try {
+			const data = await profileAPI.getFollowers(
+				currentUser.id,
+				FOLLOWERS_PAGE_SIZE,
+				offset
+			);
+
+			setFollowersData(data);
+			setFollowers((current) => {
+				if (offset === 0) {
+					return data.users;
+				}
+
+				const nextUsers = [...current];
+				for (const user of data.users) {
+					if (!nextUsers.some((existingUser) => existingUser.id === user.id)) {
+						nextUsers.push(user);
+					}
+				}
+				return nextUsers;
+			});
+			setFollowersInitialized(true);
+		} catch (err) {
+			setFollowersError(
+				err instanceof Error ? err.message : 'Failed to load followers'
+			);
+		} finally {
+			setFollowersLoading(false);
+		}
+	};
+
+	React.useEffect(() => {
+		if (postPrivacy !== 'private' || !currentUser || followersInitialized) {
+			return;
+		}
+
+		const loadInitialFollowers = async () => {
+			setFollowersLoading(true);
+			setFollowersError(null);
+
+			try {
+				const data = await profileAPI.getFollowers(
+					currentUser.id,
+					FOLLOWERS_PAGE_SIZE,
+					0
+				);
+				setFollowersData(data);
+				setFollowers(data.users);
+				setFollowersInitialized(true);
+			} catch (err) {
+				setFollowersError(
+					err instanceof Error ? err.message : 'Failed to load followers'
+				);
+			} finally {
+				setFollowersLoading(false);
+			}
+		};
+
+		void loadInitialFollowers();
+	}, [postPrivacy, currentUser, followersInitialized]);
+
 	const formatDate = (dateStr: string) => {
 		const date = new Date(dateStr);
 		const now = new Date();
@@ -80,8 +206,19 @@ export default function FeedPage() {
 		return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
 	};
 
+	const formatPrivacyLabel = (privacy: string) => {
+		switch (privacy) {
+			case 'almost_private':
+				return 'almost private';
+			default:
+				return privacy;
+		}
+	};
+
 	const resetComposer = () => {
 		setDraftContent('');
+		setPostPrivacy('public');
+		setSelectedViewerIds([]);
 		setSelectedImage(null);
 		setImagePreviewUrl(null);
 		setComposerError(null);
@@ -132,12 +269,33 @@ export default function FeedPage() {
 		});
 	};
 
+	const toggleViewerSelection = (viewerId: string) => {
+		setSelectedViewerIds((current) =>
+			current.includes(viewerId)
+				? current.filter((id) => id !== viewerId)
+				: [...current, viewerId]
+		);
+	};
+
+	const handlePrivacyChange = (privacy: PostPrivacy) => {
+		setPostPrivacy(privacy);
+		setComposerError(null);
+		if (privacy !== 'private') {
+			setSelectedViewerIds([]);
+		}
+	};
+
 	const handleCreatePost = async (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 
 		const trimmedContent = draftContent.trim();
 		if (!trimmedContent && !selectedImage) {
 			setComposerError('Write something or choose an image before posting.');
+			return;
+		}
+
+		if (postPrivacy === 'private' && selectedViewerIds.length === 0) {
+			setComposerError('Choose at least one follower for a private post.');
 			return;
 		}
 
@@ -148,7 +306,8 @@ export default function FeedPage() {
 		try {
 			const createdPost = await feedAPI.createPost({
 				content: trimmedContent || undefined,
-				privacy: 'public',
+				privacy: postPrivacy,
+				visible_to: postPrivacy === 'private' ? selectedViewerIds : undefined,
 			});
 
 			let uploadWarning: string | null = null;
@@ -201,6 +360,9 @@ export default function FeedPage() {
 		);
 	};
 
+	const hasMoreFollowers =
+		followersData !== null && followers.length < followersData.total;
+
 	return (
 		<div className="space-y-6">
 			<input
@@ -214,7 +376,7 @@ export default function FeedPage() {
 			<div className="bg-white p-4 rounded-xl border border-gray-100">
 				{isComposerOpen ? (
 					<form onSubmit={handleCreatePost} className="flex gap-4">
-						{renderAvatar()}
+						{renderAvatar(currentUser ?? undefined)}
 						<div className="flex-1 space-y-4">
 							<textarea
 								value={draftContent}
@@ -224,6 +386,143 @@ export default function FeedPage() {
 								className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
 								disabled={isSubmitting}
 							/>
+
+							<div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-3">
+								<div>
+									<p className="text-sm font-semibold text-gray-800">Post audience</p>
+									<p className="text-xs text-gray-500">
+										Choose who can see this post.
+									</p>
+								</div>
+								<div className="grid gap-2 sm:grid-cols-3">
+									{PRIVACY_OPTIONS.map((option) => {
+										const isSelected = postPrivacy === option.value;
+
+										return (
+											<button
+												key={option.value}
+												type="button"
+												onClick={() => handlePrivacyChange(option.value)}
+												className={`rounded-xl border px-4 py-3 text-left transition-colors ${
+													isSelected
+														? 'border-indigo-200 bg-indigo-50'
+														: 'border-gray-200 bg-white hover:bg-gray-50'
+												}`}
+												disabled={isSubmitting}
+											>
+												<div className="flex items-center justify-between gap-3 mb-1">
+													<span className="text-sm font-semibold text-gray-800">
+														{option.label}
+													</span>
+													{isSelected && <Check className="w-4 h-4 text-indigo-600" />}
+												</div>
+												<p className="text-xs text-gray-500 leading-relaxed">
+													{option.description}
+												</p>
+											</button>
+										);
+									})}
+								</div>
+							</div>
+
+							{postPrivacy === 'private' && (
+								<div className="rounded-xl border border-gray-100 bg-gray-50 p-3 space-y-3">
+									<div className="flex items-center justify-between gap-3">
+										<div>
+											<p className="text-sm font-semibold text-gray-800">
+												Choose viewers
+											</p>
+											<p className="text-xs text-gray-500">
+												Select which followers can see this post.
+											</p>
+										</div>
+										<span className="text-xs font-medium text-indigo-700 bg-indigo-100 rounded-full px-3 py-1">
+											{selectedViewerIds.length} selected
+										</span>
+									</div>
+
+									{followersError && (
+										<div className="rounded-xl border border-red-200 bg-white px-4 py-3">
+											<p className="text-sm text-red-600">{followersError}</p>
+										</div>
+									)}
+
+									{followersLoading && followers.length === 0 ? (
+										<div className="flex items-center justify-center rounded-xl border border-gray-200 bg-white py-8">
+											<LoaderCircle className="w-5 h-5 text-indigo-600 animate-spin" />
+										</div>
+									) : followers.length === 0 ? (
+										<div className="rounded-xl border border-gray-200 bg-white px-4 py-6 text-center">
+											<p className="text-sm text-gray-500">
+												You do not have any followers to choose from yet.
+											</p>
+										</div>
+									) : (
+										<>
+											<div className="max-h-64 overflow-y-auto rounded-xl border border-gray-200 bg-white divide-y divide-gray-100">
+												{followers.map((follower) => {
+													const isSelected = selectedViewerIds.includes(follower.id);
+													const displayName = `${follower.first_name} ${follower.last_name}`;
+
+													return (
+														<button
+															key={follower.id}
+															type="button"
+															onClick={() => toggleViewerSelection(follower.id)}
+															className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-gray-50 transition-colors"
+															disabled={isSubmitting}
+														>
+															{renderAvatar(follower)}
+															<div className="min-w-0 flex-1">
+																<p className="text-sm font-semibold text-gray-800 truncate">
+																	{displayName}
+																</p>
+																<p className="text-xs text-gray-500 truncate">
+																	{follower.nickname ? `@${follower.nickname}` : 'Follower'}
+																</p>
+															</div>
+															<div
+																className={`w-5 h-5 rounded border flex items-center justify-center ${
+																	isSelected
+																		? 'bg-indigo-600 border-indigo-600'
+																		: 'bg-white border-gray-300'
+																}`}
+															>
+																{isSelected && <Check className="w-3 h-3 text-white" />}
+															</div>
+														</button>
+													);
+												})}
+											</div>
+
+											{hasMoreFollowers && (
+												<div className="flex justify-center">
+													<Button
+														type="button"
+														variant="secondary"
+														size="sm"
+														className="rounded-full"
+														onClick={() => void loadFollowers(followers.length)}
+														disabled={followersLoading || isSubmitting}
+													>
+														{followersLoading ? (
+															<>
+																<LoaderCircle className="w-4 h-4 mr-2 animate-spin" />
+																Loading...
+															</>
+														) : (
+															<>
+																<ChevronDown className="w-4 h-4 mr-2" />
+																Load More
+															</>
+														)}
+													</Button>
+												</div>
+											)}
+										</>
+									)}
+								</div>
+							)}
 
 							{imagePreviewUrl && (
 								<div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
@@ -307,7 +606,7 @@ export default function FeedPage() {
 					</form>
 				) : (
 					<div className="flex gap-4">
-						{renderAvatar()}
+						{renderAvatar(currentUser ?? undefined)}
 						<button
 							type="button"
 							onClick={openComposer}
@@ -388,7 +687,7 @@ export default function FeedPage() {
 												{post.author.first_name} {post.author.last_name}
 											</p>
 											<p className="text-xs text-gray-500">
-												{formatDate(post.created_at)} • {post.privacy}
+												{formatDate(post.created_at)} • {formatPrivacyLabel(post.privacy)}
 											</p>
 										</div>
 									</div>

@@ -102,6 +102,22 @@ export type PostListResponse = {
 	offset: number;
 };
 
+export type ProfileResponse = {
+	user: PublicUser;
+	about_me?: string;
+	dob?: string;
+	follower_count: number;
+	following_count: number;
+	post_count: number;
+};
+
+export type FollowListResponse = {
+	users: PublicUser[];
+	total: number;
+	limit: number;
+	offset: number;
+};
+
 export type CreatePostPayload = {
 	content?: string;
 	privacy: string;
@@ -149,6 +165,20 @@ export const authAPI = {
 export const groupAPI = {
 	getGroups() {
 		return request<Group[] | { groups?: Group[] }>('/api/groups');
+	},
+};
+
+export const profileAPI = {
+	getMyProfile() {
+		return request<ProfileResponse>('/api/profile');
+	},
+
+	getFollowers(userId: string, limit?: number, offset?: number) {
+		const params = new URLSearchParams();
+		if (limit !== undefined) params.set('limit', String(limit));
+		if (offset !== undefined) params.set('offset', String(offset));
+		const query = params.toString();
+		return request<FollowListResponse>(`/api/users/${userId}/followers${query ? `?${query}` : ''}`);
 	},
 };
 
