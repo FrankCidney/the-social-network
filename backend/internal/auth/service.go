@@ -67,7 +67,7 @@ func (s *service) Register(req models.RegisterRequest) (*models.AuthResponse, er
 	}
 
 	return &models.AuthResponse{
-		User: toPublicUser(user),
+		User: user.ToPublic(),
 		Token: session.Token,
 	}, nil
 }
@@ -93,7 +93,7 @@ func (s *service) Login(email, password string) (*models.AuthResponse, error)  {
 	}
  
 	return &models.AuthResponse{
-		User:  toPublicUser(user),
+		User:  user.ToPublic(),
 		Token: session.Token,
 	}, nil
 }
@@ -173,15 +173,4 @@ func (s *service) createSession(userID string) (*models.Session, error) {
 	}
  
 	return session, nil
-}
-
-func toPublicUser(u *models.User) *models.PublicUser {
-	return &models.PublicUser{
-		ID:         u.ID,
-		FirstName:  u.FirstName,
-		LastName:   u.LastName,
-		Nickname:   u.Nickname,
-		AvatarPath: u.AvatarPath,
-		IsPublic:   u.IsPublic,
-	}
 }

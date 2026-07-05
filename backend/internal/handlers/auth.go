@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"net/http"
 	"social-network/internal/apperror"
@@ -83,34 +82,6 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	})
  
 	response.NoContent(w)
-}
-
-// writeServiceError maps domain errors to HTTP status codes
-func writeServiceError(w http.ResponseWriter, err error) {
-	var appErr *apperror.AppError
-	if !errors.As(err, &appErr) {
-		// Unexpected error — don't leak internals
-		response.Error(w, apperror.Internal("something went wrong"), http.StatusInternalServerError)
-		return
-	}
- 
-	var status int
-	switch {
-	case errors.Is(appErr.Err, apperror.ErrBadInput):
-		status = http.StatusBadRequest
-	case errors.Is(appErr.Err, apperror.ErrUnauthorized):
-		status = http.StatusUnauthorized
-	case errors.Is(appErr.Err, apperror.ErrForbidden):
-		status = http.StatusForbidden
-	case errors.Is(appErr.Err, apperror.ErrNotFound):
-		status = http.StatusNotFound
-	case errors.Is(appErr.Err, apperror.ErrConflict):
-		status = http.StatusConflict
-	default:
-		status = http.StatusInternalServerError
-	}
- 
-	response.Error(w, appErr, status)
 }
 
 func setSessionCookie(w http.ResponseWriter, token string) {

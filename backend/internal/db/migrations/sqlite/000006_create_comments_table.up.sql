@@ -4,6 +4,7 @@ CREATE TABLE comments (
     user_id TEXT NOT NULL,
     content TEXT,
     image_url TEXT,
+    parent_comment_id TEXT REFERENCES comments(id),
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -11,3 +12,4 @@ CREATE TABLE comments (
 );
 
 CREATE INDEX idx_comments_post ON comments(post_id);
+CREATE INDEX idx_comments_parent ON comments(parent_comment_id);

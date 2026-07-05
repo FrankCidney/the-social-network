@@ -38,6 +38,34 @@ type FollowRequestResponse struct {
 	Status     string `json:"status"`
 }
 
+type PostResponse struct {
+	ID        string      `json:"id"`
+	Author    *PublicUser `json:"author"`
+	GroupID   *string     `json:"group_id,omitempty"`
+	Content   string      `json:"content,omitempty"`
+	ImageURL  string      `json:"image_url,omitempty"`
+	Privacy   string      `json:"privacy"`
+	CreatedAt string      `json:"created_at"`
+}
+
+type CommentResponse struct {
+	ID        string             `json:"id"`
+	Author    *PublicUser        `json:"author"`
+	Content   string             `json:"content,omitempty"`
+	ImageURL  string             `json:"image_url,omitempty"`
+	Depth     int                `json:"depth"`
+	CreatedAt string             `json:"created_at"`
+	Replies   []*CommentResponse `json:"replies"`
+}
+
+// PostListResponse is the paginated response for a feed.
+type PostListResponse struct {
+	Posts  []*PostResponse `json:"posts"`
+	Total  int             `json:"total"`
+	Limit  int             `json:"limit"`
+	Offset int             `json:"offset"`
+}
+
 type ErrorValue struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`

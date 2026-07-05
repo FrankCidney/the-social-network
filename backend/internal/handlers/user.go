@@ -8,7 +8,6 @@ import (
 	"social-network/internal/models"
 	"social-network/internal/response"
 	"social-network/internal/user"
-	"strconv"
 )
 
 type UserHandler struct {
@@ -103,11 +102,4 @@ func (h *UserHandler) GetFollowing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response.JSON(w, http.StatusOK, result)
-}
-
-func parsePagination(r *http.Request) (limit, offset int) {
-	// Service layer handles the edge cases for limit and offset
-	limit, _ = strconv.Atoi(r.URL.Query().Get("limit"))
-	offset, _ = strconv.Atoi(r.URL.Query().Get("offset"))
-	return
 }

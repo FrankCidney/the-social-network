@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"social-network/internal/apperror"
 	"social-network/internal/auth"
@@ -32,7 +33,8 @@ func RequireAuth(authService auth.Service, next http.Handler) http.Handler {
 
 				return
 			}
-
+			
+			slog.Error("unhandled error reached auth middleware", "error", err)
 			response.Error(w, apperror.Internal("authentication failed"), http.StatusInternalServerError)
 			return
 		}

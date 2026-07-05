@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/sqlite3"
@@ -19,6 +21,11 @@ type SQLiteStore struct {
 // NewSQLiteStore initializes a new SQLite connection and applies migrations.
 // It takes the dataSourceName (file path) and the path to the migrations folder.
 func NewSQLiteStore(dataSourceName, migrationsPath string) (*SQLiteStore, error) {
+	dir := filepath.Dir(dataSourceName)
+	if err := os.MkdirAll(dir, os.ModePerm); err != nil {
+		return nil, fmt.Errorf("failed to create database directory %q: %v", dir, err)
+	}
+
 	// Open the database connection
 	dsn := dataSourceName + "?_foreign_keys=on&_journal_mode=WAL"
 
@@ -35,6 +42,7 @@ func NewSQLiteStore(dataSourceName, migrationsPath string) (*SQLiteStore, error)
 
 	// Apply migrations
 	if err := applyMigrations(db, migrationsPath); err != nil {
+		db.Close() // Clean up if migrations fail so as not to leak connections
 		return nil, fmt.Errorf("failed to apply migrations: %v", err)
 	}
 
