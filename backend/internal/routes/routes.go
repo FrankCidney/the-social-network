@@ -18,7 +18,8 @@ func NewRouter(
 	registerAuthRoutes(mux, authHandler, authService)
 	registerProfileRoutes(mux, userHandler, authService)
 	registerFollowRoutes(mux, followHandler, authService)
-	return mux
+
+	return middleware.CORS(mux)
 }
 
 func registerAuthRoutes(mux *http.ServeMux, h *handlers.AuthHandler, authService auth.Service) {

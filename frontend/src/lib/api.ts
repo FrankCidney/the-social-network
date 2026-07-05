@@ -30,47 +30,77 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 }
 
 async function getErrorMessage(response: Response) {
-  try {
-    const data = await response.json();
+	try {
+		const data = await response.json();
 
-    if (typeof data?.error === 'string') {
-      return data.error;
-    }
+		if (typeof data?.error?.message === 'string') {
+			return data.error.message;
+		}
 
-    if (typeof data?.message === 'string') {
-      return data.message;
-    }
-  } catch {
-    // Fall back to the status text below when the response is not JSON.
-  }
+		if (typeof data?.error === 'string') {
+			return data.error;
+		}
 
-  return response.statusText || 'Request failed';
+		if (typeof data?.message === 'string') {
+			return data.message;
+		}
+	} catch {
+		// Fall back to the status text below when the response is not JSON.
+	}
+
+	return response.statusText || 'Request failed';
 }
 
 export type RegisterPayload = {
-  email: string;
-  password: string;
-  first_name: string;
-  last_name: string;
-  dob: string;
-  nickname?: string;
+	email: string;
+	password: string;
+	first_name: string;
+	last_name: string;
+	dob: string;
+	nickname?: string;
+};
+
+export type LoginPayload = {
+	email: string;
+	password: string;
+};
+
+export type AuthResponse = {
+	user: PublicUser;
+	token: string;
+};
+
+export type PublicUser = {
+	id: string;
+	first_name: string;
+	last_name: string;
+	nickname?: string;
+	avatar_path?: string;
+	is_public: boolean;
 };
 
 export type Group = {
-  id: string;
-  creator_id: string;
-  title: string;
-  description: string;
-  created_at: string;
+	id: string;
+	creator_id: string;
+	title: string;
+	description: string;
+	created_at: string;
 };
 
 export const authAPI = {
-  register(payload: RegisterPayload) {
-    return request('/api/auth/register', {
-      method: 'POST',
-      body: payload,
-    });
-  },
+	register(payload: RegisterPayload) {
+		return request<AuthResponse>('/api/auth/register', {
+			method: 'POST',
+			body: payload,
+		});
+	},
+
+	login(payload: LoginPayload) {
+		return request<AuthResponse>('/api/auth/login', {
+			method: 'POST',
+			body: payload,
+		});
+	},
 };
 
 export const groupAPI = {
