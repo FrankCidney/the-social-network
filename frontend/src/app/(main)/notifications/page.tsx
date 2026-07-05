@@ -6,15 +6,6 @@ import { Bell, CheckCircle2, Clock3, MessageSquare, Sparkles, Users } from 'luci
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { notificationsAPI, NotificationItem, NotificationListResponse } from '@/lib/api';
 
-type NotificationItem = {
-  id: string;
-  type: string;
-  actor_id: string;
-  created_at: string;
-  is_read: boolean;
-  message?: string;
-};
-
 function formatTimestamp(value: string) {
   const date = new Date(value);
   const now = new Date();
@@ -75,6 +66,13 @@ function getNotificationIcon(type: string) {
   }
 }
 
+// The endpoint may return a bare array or a wrapped object — handle both.
+function unwrapNotifications(
+  data: NotificationListResponse | NotificationItem[]
+): NotificationItem[] {
+  return Array.isArray(data) ? data : data.notifications;
+}
+
 export default function NotificationsPage() {
   const { socket, isConnected } = useWebSocket();
 
@@ -98,6 +96,11 @@ export default function NotificationsPage() {
   }, []);
 
   React.useEffect(() => {
+    loadNotifications();
+  }, [loadNotifications]);
+
+  // Live notifications pushed over the shared WebSocket connection.
+  React.useEffect(() => {
     if (!socket) return;
 
     const handleMessage = (event: MessageEvent) => {
@@ -110,13 +113,16 @@ export default function NotificationsPage() {
           data.type === 'group_event'
         ) {
           const payload = data.payload as NotificationItem;
-          setNotifications((prev) => [
-            {
-              ...payload,
-              message: payload.message ?? getNotificationDescription(payload.type, payload.actor_id),
-            },
-            ...prev,
-          ]);
+          setNotifications((prev) => {
+            if (prev.some((item) => item.id === payload.id)) return prev;
+            return [
+              {
+                ...payload,
+                message: payload.message ?? getNotificationDescription(payload.type, payload.actor_id),
+              },
+              ...prev,
+            ];
+          });
         }
       } catch (err) {
         console.error('Failed to parse notification payload', err);
@@ -129,7 +135,20 @@ export default function NotificationsPage() {
 
   const unreadCount = notifications.filter((item) => !item.is_read).length;
 
-   const markAllAsRead = async () => {
+  const handleMarkAsRead = async (notificationId: string) => {
+    const previous = notifications;
+    setNotifications((prev) =>
+      prev.map((item) => (item.id === notificationId ? { ...item, is_read: true } : item))
+    );
+    try {
+      await notificationsAPI.markAsRead(notificationId);
+    } catch (err) {
+      console.error('Failed to mark notification as read', err);
+      setNotifications(previous); // roll back on failure
+    }
+  };
+
+  const markAllAsRead = async () => {
     if (unreadCount === 0) return;
     const previous = notifications;
     setNotifications((prev) => prev.map((item) => ({ ...item, is_read: true })));
@@ -144,7 +163,6 @@ export default function NotificationsPage() {
       setMarkingAll(false);
     }
   };
-
 
   return (
     <div className="space-y-6">
@@ -164,10 +182,11 @@ export default function NotificationsPage() {
 
           <button
             onClick={markAllAsRead}
-            className="inline-flex items-center gap-2 rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            disabled={markingAll || unreadCount === 0}
+            className="inline-flex items-center gap-2 rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <CheckCircle2 className="w-4 h-4" />
-            Mark all read
+            {markingAll ? 'Marking…' : 'Mark all read'}
           </button>
         </div>
 
@@ -188,7 +207,35 @@ export default function NotificationsPage() {
       </div>
 
       <div className="space-y-4">
-        {notifications.length === 0 ? (
+        {loading && (
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="bg-white rounded-xl border border-gray-100 p-4 animate-pulse">
+                <div className="flex items-start gap-3">
+                  <div className="w-9 h-9 rounded-full bg-gray-100 shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="w-40 h-3 bg-gray-100 rounded" />
+                    <div className="w-64 h-3 bg-gray-100 rounded" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!loading && error && (
+          <div className="bg-white rounded-xl border border-gray-100 p-8 text-center">
+            <p className="text-sm text-red-600 mb-3">{error}</p>
+            <button
+              onClick={loadNotifications}
+              className="text-sm text-indigo-600 hover:underline"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {!loading && !error && notifications.length === 0 && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -200,17 +247,21 @@ export default function NotificationsPage() {
               New activity will appear here as soon as the app sends it.
             </p>
           </motion.div>
-        ) : (
+        )}
+
+        {!loading &&
+          !error &&
           notifications.map((notification, index) => (
             <motion.div
               key={notification.id}
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: index * 0.04 }}
+              onClick={() => !notification.is_read && handleMarkAsRead(notification.id)}
               className={`rounded-xl border p-4 transition-colors ${
                 notification.is_read
                   ? 'border-gray-100 bg-white'
-                  : 'border-indigo-100 bg-indigo-50/70'
+                  : 'border-indigo-100 bg-indigo-50/70 cursor-pointer hover:bg-indigo-50'
               }`}
             >
               <div className="flex items-start gap-3">
@@ -233,8 +284,7 @@ export default function NotificationsPage() {
                 </div>
               </div>
             </motion.div>
-          ))
-        )}
+          ))}
       </div>
     </div>
   );
