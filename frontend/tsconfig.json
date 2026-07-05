@@ -23,7 +23,6 @@
       }
     ],
     "strictNullChecks": true,
-    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./src/*"
@@ -37,6 +36,8 @@
     "**/*.tsx"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "src/legacy",
+    "src/layouts"
   ]
 }
