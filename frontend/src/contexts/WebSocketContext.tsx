@@ -16,7 +16,10 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Only connect if we have a session token (we rely on the browser's cookie management)
     // The server will check the cookie and upgrade the connection.
-    const wsUrl = `ws://${window.location.host}/api/ws`;
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    const wsUrl = apiUrl
+      ? `${apiUrl.replace(/^http/, "ws")}/api/ws`
+      : `ws://${window.location.host}/api/ws`;
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {

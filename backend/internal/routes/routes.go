@@ -30,7 +30,7 @@ func NewRouter(
 	
 	mux.Handle("GET /api/ws", middleware.RequireAuth(authService, http.HandlerFunc(wsHandler.ServeWS)))
 	
-	return mux
+	return middleware.CORS(mux)
 }
 
 func registerAuthRoutes(mux *http.ServeMux, h *handlers.AuthHandler, authService auth.Service) {

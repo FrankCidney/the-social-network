@@ -45,7 +45,7 @@ export default function RegisterPage() {
       setSuccess('Registration successful! Redirecting...');
 
       setTimeout(() => {
-        router.push('/login');
+        router.push('/feed');
       }, 1500);
 
     } catch (err) {
