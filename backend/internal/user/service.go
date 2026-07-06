@@ -1,6 +1,7 @@
 package user
 
 import (
+	"errors"
 	"fmt"
 	"mime/multipart"
 	"os"
@@ -23,6 +24,10 @@ type Service interface {
 	GetFollowing(userID string, limit, offset int) (*models.FollowListResponse, error)
 }
 
+type PostCounter interface {
+	GetPostCountByAuthor(authorID string) (int, error)
+}
+
 const (
 	avatarUploadDir = "uploads/avatars"
 )
@@ -30,10 +35,16 @@ const (
 type service struct {
 	users   repository.UserRepository
 	follows repository.FollowRepository
+	posts   PostCounter
 }
 
-func NewService(users repository.UserRepository, follows repository.FollowRepository) Service {
-	return &service{users: users, follows: follows}
+func NewService(users repository.UserRepository, follows repository.FollowRepository, posts ...PostCounter) Service {
+	var postCounter PostCounter
+	if len(posts) > 0 {
+		postCounter = posts[0]
+	}
+
+	return &service{users: users, follows: follows, posts: postCounter}
 }
 
 func (s *service) GetProfile(viewerID, targetID string) (*models.Profile, error) {
@@ -41,7 +52,7 @@ func (s *service) GetProfile(viewerID, targetID string) (*models.Profile, error)
 	if err != nil {
 		return nil, err
 	}
- 
+
 	followerCount, err := s.follows.GetFollowerCount(targetID)
 	if err != nil {
 		return nil, fmt.Errorf("get follower count: %w", err)
@@ -50,40 +61,75 @@ func (s *service) GetProfile(viewerID, targetID string) (*models.Profile, error)
 	if err != nil {
 		return nil, fmt.Errorf("get following count: %w", err)
 	}
- 
-	profile := &models.Profile{
-		User:           target.ToPublic(),
-		FollowerCount:  followerCount,
-		FollowingCount: followingCount,
+	postCount, err := s.getPostCount(targetID)
+	if err != nil {
+		return nil, fmt.Errorf("get post count: %w", err)
 	}
- 
+
+	isOwnProfile := viewerID == targetID
+	isFollowing := false
+	followRequestStatus := ""
+
+	if !isOwnProfile {
+		isFollowing, err = s.follows.IsFollowing(viewerID, targetID)
+		if err != nil {
+			return nil, fmt.Errorf("check following: %w", err)
+		}
+
+		if !isFollowing {
+			followRequest, err := s.follows.GetFollowRequest(viewerID, targetID)
+			if err != nil {
+				if !errors.Is(err, apperror.ErrNotFound) {
+					return nil, fmt.Errorf("get follow request: %w", err)
+				}
+			} else {
+				followRequestStatus = followRequest.Status
+			}
+		}
+	}
+
+	profile := &models.Profile{
+		User:                target.ToPublic(),
+		FollowerCount:       followerCount,
+		FollowingCount:      followingCount,
+		PostCount:           postCount,
+		IsOwnProfile:        isOwnProfile,
+		IsFollowing:         isFollowing,
+		FollowRequestStatus: followRequestStatus,
+	}
+
 	// Visibility
 	// Owner always gets full profile.
-	if viewerID == targetID {
+	if isOwnProfile {
+		profile.Email = target.Email
 		profile.AboutMe = target.AboutMe
 		profile.DOB = target.DOB
 		return profile, nil
 	}
- 
+
 	// Public profile: Show full data.
 	if target.IsPublic {
 		profile.AboutMe = target.AboutMe
 		profile.DOB = target.DOB
 		return profile, nil
 	}
- 
+
 	// Private profile: Show full data only if the viewer is a confirmed follower.
-	following, err := s.follows.IsFollowing(viewerID, targetID)
-	if err != nil {
-		return nil, fmt.Errorf("check following: %w", err)
-	}
-	if following {
+	if isFollowing {
 		profile.AboutMe = target.AboutMe
 		profile.DOB = target.DOB
 		return profile, nil
 	}
- 
+
 	return profile, nil
+}
+
+func (s *service) getPostCount(userID string) (int, error) {
+	if s.posts == nil {
+		return 0, nil
+	}
+
+	return s.posts.GetPostCountByAuthor(userID)
 }
 
 func (s *service) UpdateProfile(userID string, req models.UpdateProfileRequest) error {
@@ -91,7 +137,7 @@ func (s *service) UpdateProfile(userID string, req models.UpdateProfileRequest) 
 	if err != nil {
 		return err
 	}
- 
+
 	// Only overwrite fields the caller actually sent.
 	if v := strings.TrimSpace(req.FirstName); v != "" {
 		user.FirstName = v
@@ -111,7 +157,7 @@ func (s *service) UpdateProfile(userID string, req models.UpdateProfileRequest) 
 	// AboutMe can be explicitly set to empty string to clear it. The field is optional
 	// and clearing it is a valid update.
 	user.AboutMe = req.AboutMe
- 
+
 	if err := s.users.UpdateUser(user); err != nil {
 		return err
 	}
@@ -119,7 +165,7 @@ func (s *service) UpdateProfile(userID string, req models.UpdateProfileRequest) 
 	if req.IsPublic != nil {
 		return s.users.SetProfileVisibility(userID, *req.IsPublic)
 	}
- 
+
 	return nil
 }
 
@@ -133,12 +179,12 @@ func (s *service) UploadAvatar(userID string, file multipart.File, header *multi
 	if header.Size > mediavalidate.MaxImageSize {
 		return "", apperror.BadInput("avatar must be under 5 MB")
 	}
- 
+
 	ext := strings.ToLower(filepath.Ext(header.Filename))
 	if !mediavalidate.AllowedImageExts[ext] {
 		return "", apperror.BadInput("avatar must be a JPEG, PNG, or GIF")
 	}
- 
+
 	buf := make([]byte, 512)
 	n, err := file.Read(buf)
 	if err != nil {
@@ -153,38 +199,38 @@ func (s *service) UploadAvatar(userID string, file multipart.File, header *multi
 	if _, err := file.Seek(0, 0); err != nil {
 		return "", apperror.Internal("could not process file")
 	}
- 
+
 	if err := os.MkdirAll(avatarUploadDir, 0o755); err != nil {
 		return "", apperror.Internal("could not create upload directory")
 	}
- 
+
 	// Filename: userID + nanosecond timestamp prevents collisions and
 	// makes it easy to find old avatars for cleanup later.
 	filename := fmt.Sprintf("%s_%d%s", userID, time.Now().UnixNano(), ext)
 	destPath := filepath.Join(avatarUploadDir, filename)
- 
+
 	dest, err := os.Create(destPath)
 	if err != nil {
 		return "", apperror.Internal("could not save avatar")
 	}
 	defer dest.Close()
- 
+
 	if _, err := dest.ReadFrom(file); err != nil {
 		_ = os.Remove(destPath) // clean up partial write
 		return "", apperror.Internal("could not write avatar")
 	}
- 
+
 	if err := s.users.UpdateAvatarPath(userID, destPath); err != nil {
 		_ = os.Remove(destPath) // clean up orphaned file
 		return "", err
 	}
- 
+
 	return destPath, nil
 }
 
 func (s *service) GetFollowers(userID string, limit, offset int) (*models.FollowListResponse, error) {
 	limit, offset = paginate.ClampPagination(limit, offset)
- 
+
 	// Verify user exists
 	_, err := s.users.GetUserByID(userID)
 	if err != nil {
@@ -200,7 +246,7 @@ func (s *service) GetFollowers(userID string, limit, offset int) (*models.Follow
 	if err != nil {
 		return nil, err
 	}
- 
+
 	return &models.FollowListResponse{
 		Users:  toPublicUsers(users),
 		Total:  total,
@@ -211,13 +257,13 @@ func (s *service) GetFollowers(userID string, limit, offset int) (*models.Follow
 
 func (s *service) GetFollowing(userID string, limit, offset int) (*models.FollowListResponse, error) {
 	limit, offset = paginate.ClampPagination(limit, offset)
-	
- 	// Verify user exists
+
+	// Verify user exists
 	_, err := s.users.GetUserByID(userID)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	users, err := s.follows.GetFollowing(userID, limit, offset)
 	if err != nil {
 		return nil, err
@@ -227,7 +273,7 @@ func (s *service) GetFollowing(userID string, limit, offset int) (*models.Follow
 	if err != nil {
 		return nil, err
 	}
- 
+
 	return &models.FollowListResponse{
 		Users:  toPublicUsers(users),
 		Total:  total,

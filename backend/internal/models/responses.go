@@ -17,12 +17,16 @@ type PublicUser struct {
 
 // Profile is the full profile response (can be partial depending on visibility)
 type Profile struct {
-	User           *PublicUser `json:"user"`
-	AboutMe        string      `json:"about_me,omitempty"`
-	DOB            string      `json:"dob,omitempty"`
-	FollowerCount  int         `json:"follower_count"`
-	FollowingCount int         `json:"following_count"`
-	PostCount      int         `json:"post_count"`
+	User                *PublicUser `json:"user"`
+	Email               string      `json:"email,omitempty"`
+	AboutMe             string      `json:"about_me,omitempty"`
+	DOB                 string      `json:"dob,omitempty"`
+	FollowerCount       int         `json:"follower_count"`
+	FollowingCount      int         `json:"following_count"`
+	PostCount           int         `json:"post_count"`
+	IsOwnProfile        bool        `json:"is_own_profile"`
+	IsFollowing         bool        `json:"is_following"`
+	FollowRequestStatus string      `json:"follow_request_status,omitempty"`
 }
 
 type FollowListResponse struct {

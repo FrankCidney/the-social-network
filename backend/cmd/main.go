@@ -7,8 +7,8 @@ import (
 	"os"
 	"os/signal"
 	"social-network/internal/auth"
-	"social-network/internal/comment"
 	"social-network/internal/chat"
+	"social-network/internal/comment"
 	"social-network/internal/db"
 	"social-network/internal/follow"
 	"social-network/internal/groups"
@@ -56,7 +56,7 @@ func main() {
 
 	// Services
 	authService := auth.NewService(userRepo, sessionRepo)
-	userService := user.NewService(userRepo, followRepo)
+	userService := user.NewService(userRepo, followRepo, postRepo)
 	followService := follow.NewService(userRepo, followRepo, wsNotifier)
 	groupService := groups.NewService(groupRepo, wsNotifier)
 	chatService := chat.NewService(msgRepo, groupRepo, followRepo, wsNotifier)
@@ -74,13 +74,13 @@ func main() {
 
 	// Routes
 	apiMux := routes.NewRouter(
-		authHandler, 
-		userHandler, 
-		followHandler, 
+		authHandler,
+		userHandler,
+		followHandler,
 		postHandler,
 		commentHandler,
-		wsHandler, 
-		groupHandler, 
+		wsHandler,
+		groupHandler,
 		chatHandler,
 		authService,
 	)
@@ -92,17 +92,17 @@ func main() {
 	// Background cleanup
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go cleanExpiredSessions(ctx, sessionRepo)	
+	go cleanExpiredSessions(ctx, sessionRepo)
 
 	// Server
 	addr := envOr("ADDR", ":8080")
 	srv := &http.Server{
-		Addr: addr,
-		Handler: mux,
+		Addr:              addr,
+		Handler:           mux,
 		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:  80 * time.Second,
-		WriteTimeout: 80 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		ReadTimeout:       80 * time.Second,
+		WriteTimeout:      80 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Graceful shutdown on SIGINT/SIGTERM.

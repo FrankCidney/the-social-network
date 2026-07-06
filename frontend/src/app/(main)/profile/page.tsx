@@ -1,15 +1,34 @@
 'use client';
 
 import * as React from 'react';
-import { CheckCircle2, Pencil, Sparkles, Users, X } from 'lucide-react';
+import {
+  Calendar,
+  Camera,
+  CheckCircle2,
+  FileText,
+  Globe2,
+  Lock,
+  Mail,
+  Pencil,
+  Sparkles,
+  UserMinus,
+  UserPlus,
+  Users,
+  X,
+} from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import {
+  feedAPI,
+  followAPI,
+  PostResponse,
   profileAPI,
   ProfileResponse,
   PublicUser,
   resolveAssetUrl,
   UpdateProfilePayload,
 } from '@/lib/api';
+
+const LIST_LIMIT = 20;
 
 function getDisplayName(user: PublicUser) {
   return user.nickname?.trim() ? user.nickname : `${user.first_name} ${user.last_name}`;
@@ -22,6 +41,7 @@ function getInitials(user: PublicUser) {
 function formatDate(value?: string) {
   if (!value) return 'Not provided';
   const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Not provided';
   return date.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
@@ -29,7 +49,17 @@ function formatDate(value?: string) {
   });
 }
 
-// Converts a dob string to yyyy-mm-dd for the <input type="date"> value.
+function formatShortDate(value?: string) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 function toDateInputValue(value?: string) {
   if (!value) return '';
   const date = new Date(value);
@@ -46,6 +76,26 @@ type EditFormState = {
   is_public: boolean;
 };
 
+type StatsPanel = 'followers' | 'following' | 'posts';
+
+type StatsPanelState = {
+  type: StatsPanel;
+  loading: boolean;
+  error: string | null;
+  users: PublicUser[];
+  posts: PostResponse[];
+};
+
+function emptyPanel(type: StatsPanel): StatsPanelState {
+  return {
+    type,
+    loading: true,
+    error: null,
+    users: [],
+    posts: [],
+  };
+}
+
 export default function ProfilePage() {
   const [profile, setProfile] = React.useState<ProfileResponse | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -59,6 +109,8 @@ export default function ProfilePage() {
   const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = React.useState(false);
+  const [followLoading, setFollowLoading] = React.useState(false);
+  const [panel, setPanel] = React.useState<StatsPanelState | null>(null);
   const avatarInputRef = React.useRef<HTMLInputElement>(null);
 
   const loadProfile = React.useCallback(async () => {
@@ -78,6 +130,12 @@ export default function ProfilePage() {
   React.useEffect(() => {
     void loadProfile();
   }, [loadProfile]);
+
+  React.useEffect(() => {
+    return () => {
+      if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    };
+  }, [avatarPreview]);
 
   const startEditing = () => {
     if (!profile) return;
@@ -105,6 +163,7 @@ export default function ProfilePage() {
   const handleAvatarSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview);
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
   };
@@ -115,8 +174,6 @@ export default function ProfilePage() {
     setSaveError(null);
 
     try {
-      // Upload the new avatar first, if one was chosen, so it's reflected
-      // in the same profile refresh as the rest of the field updates.
       if (avatarFile) {
         setUploadingAvatar(true);
         await profileAPI.uploadAvatar(avatarFile);
@@ -145,6 +202,69 @@ export default function ProfilePage() {
     } finally {
       setSaving(false);
       setUploadingAvatar(false);
+    }
+  };
+
+  const handleFollowToggle = async () => {
+    if (!profile || profile.is_own_profile !== false) return;
+
+    const wasFollowing = Boolean(profile.is_following);
+    setFollowLoading(true);
+
+    try {
+      if (wasFollowing) {
+        await followAPI.unfollow(profile.user.id);
+      } else {
+        await followAPI.follow(profile.user.id);
+      }
+
+      setProfile((current) => {
+        if (!current) return current;
+        const createsPendingRequest = !wasFollowing && !current.user.is_public;
+
+        return {
+          ...current,
+          follower_count: createsPendingRequest
+            ? current.follower_count
+            : Math.max(0, current.follower_count + (wasFollowing ? -1 : 1)),
+          is_following: createsPendingRequest ? false : !wasFollowing,
+          follow_request_status: createsPendingRequest ? 'pending' : undefined,
+        };
+      });
+    } catch (err) {
+      console.error('Failed to update follow state', err);
+    } finally {
+      setFollowLoading(false);
+    }
+  };
+
+  const openStatsPanel = async (type: StatsPanel) => {
+    if (!profile) return;
+    setPanel(emptyPanel(type));
+
+    try {
+      if (type === 'followers') {
+        const data = await profileAPI.getFollowers(profile.user.id, LIST_LIMIT, 0);
+        setPanel({ type, loading: false, error: null, users: data.users, posts: [] });
+        return;
+      }
+
+      if (type === 'following') {
+        const data = await profileAPI.getFollowing(profile.user.id, LIST_LIMIT, 0);
+        setPanel({ type, loading: false, error: null, users: data.users, posts: [] });
+        return;
+      }
+
+      const data = await feedAPI.getUserPosts(profile.user.id, LIST_LIMIT, 0);
+      setPanel({ type, loading: false, error: null, users: [], posts: data.posts });
+    } catch (err) {
+      setPanel({
+        type,
+        loading: false,
+        error: err instanceof Error ? err.message : 'Could not load this list.',
+        users: [],
+        posts: [],
+      });
     }
   };
 
@@ -180,88 +300,27 @@ export default function ProfilePage() {
     return null;
   }
 
+  const isOwnProfile = profile.is_own_profile ?? true;
+  const isFollowing = Boolean(profile.is_following);
+  const isPrivateLimited =
+    !isOwnProfile && !profile.user.is_public && !profile.about_me && !profile.dob;
   const avatarUrl = avatarPreview || resolveAssetUrl(profile.user.avatar_path);
   const name = getDisplayName(profile.user);
   const handle = `@${profile.user.first_name.toLowerCase()}${profile.user.last_name.toLowerCase()}`;
+  const email = isOwnProfile ? profile.email ?? profile.user.email : undefined;
 
-  return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-xl border border-gray-100 p-6">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-center gap-5">
-            <div className="relative flex h-20 w-20 items-center justify-center rounded-3xl bg-indigo-100 text-3xl font-bold text-indigo-700 overflow-hidden">
-              {avatarUrl ? (
-                <img src={avatarUrl} alt={name} className="h-full w-full object-cover" />
-              ) : (
-                getInitials(profile.user)
-              )}
-              {isEditing && (
-                <button
-                  type="button"
-                  onClick={() => avatarInputRef.current?.click()}
-                  className="absolute inset-0 flex items-center justify-center bg-black/40 text-white text-xs font-medium opacity-0 hover:opacity-100 transition-opacity"
-                >
-                  Change
-                </button>
-              )}
-              <input
-                ref={avatarInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleAvatarSelect}
-              />
-            </div>
+  if (isEditing && form) {
+    return (
+      <div className="space-y-6">
+        <div className="rounded-xl border border-gray-100 bg-white p-6">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              {isEditing && form ? (
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <input
-                      value={form.first_name}
-                      onChange={(e) => setForm({ ...form, first_name: e.target.value })}
-                      placeholder="First name"
-                      className="w-32 rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                    <input
-                      value={form.last_name}
-                      onChange={(e) => setForm({ ...form, last_name: e.target.value })}
-                      placeholder="Last name"
-                      className="w-32 rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                  </div>
-                  <input
-                    value={form.nickname}
-                    onChange={(e) => setForm({ ...form, nickname: e.target.value })}
-                    placeholder="Nickname (optional)"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
-              ) : (
-                <>
-                  <h1 className="text-3xl font-bold text-gray-900">{name}</h1>
-                  <p className="text-sm text-gray-500 mt-1">{handle}</p>
-                </>
-              )}
-
-              <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-sm text-gray-600">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                {isEditing && form ? (
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={form.is_public}
-                      onChange={(e) => setForm({ ...form, is_public: e.target.checked })}
-                    />
-                    {form.is_public ? 'Public profile' : 'Private profile'}
-                  </label>
-                ) : (
-                  <>{profile.user.is_public ? 'Public profile' : 'Private profile'}</>
-                )}
-              </div>
+              <h1 className="text-2xl font-bold text-gray-900">Edit profile</h1>
+              <p className="mt-1 text-sm text-gray-500">
+                Update the information people see on your profile.
+              </p>
             </div>
-          </div>
 
-          {isEditing ? (
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
@@ -277,116 +336,419 @@ export default function ProfilePage() {
                 variant="primary"
                 size="lg"
                 onClick={handleSave}
-                disabled={saving || !form?.first_name.trim() || !form?.last_name.trim()}
+                disabled={saving || !form.first_name.trim() || !form.last_name.trim()}
                 className="flex items-center gap-2"
               >
                 {saving ? (uploadingAvatar ? 'Uploading photo…' : 'Saving…') : 'Save changes'}
               </Button>
             </div>
-          ) : (
-            <Button variant="secondary" size="lg" onClick={startEditing} className="flex items-center gap-2">
-              <Pencil className="w-4 h-4" />
-              Edit profile
-            </Button>
-          )}
-        </div>
-
-        {saveError && (
-          <p className="mt-4 text-sm text-red-600">{saveError}</p>
-        )}
-
-        <div className="mt-8 grid gap-4 sm:grid-cols-3">
-          <div className="rounded-3xl border border-gray-100 bg-gray-50 p-5">
-            <p className="text-sm text-gray-500">Followers</p>
-            <p className="mt-2 text-3xl font-semibold text-gray-900">{profile.follower_count.toLocaleString()}</p>
           </div>
-          <div className="rounded-3xl border border-gray-100 bg-gray-50 p-5">
-            <p className="text-sm text-gray-500">Following</p>
-            <p className="mt-2 text-3xl font-semibold text-gray-900">{profile.following_count.toLocaleString()}</p>
-          </div>
-          <div className="rounded-3xl border border-gray-100 bg-gray-50 p-5">
-            <p className="text-sm text-gray-500">Posts</p>
-            <p className="mt-2 text-3xl font-semibold text-gray-900">{profile.post_count.toLocaleString()}</p>
-          </div>
-        </div>
-      </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-4">
-          <div className="rounded-xl border border-gray-100 bg-white p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">About you</h2>
-                <p className="text-sm text-gray-500 mt-1">A quick summary of your profile info.</p>
+          {saveError && <p className="mt-4 text-sm text-red-600">{saveError}</p>}
+
+          <div className="mt-8 grid gap-8 lg:grid-cols-[220px_1fr]">
+            <div className="space-y-4">
+              <div className="relative mx-auto flex h-32 w-32 items-center justify-center overflow-hidden rounded-xl bg-indigo-100 text-4xl font-bold text-indigo-700">
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt={name} className="h-full w-full object-cover" />
+                ) : (
+                  getInitials(profile.user)
+                )}
               </div>
-              <Sparkles className="w-5 h-5 text-indigo-500" />
-            </div>
-            {isEditing && form ? (
-              <textarea
-                value={form.about_me}
-                onChange={(e) => setForm({ ...form, about_me: e.target.value })}
-                rows={4}
-                placeholder="Tell people a bit about yourself..."
-                className="mt-6 w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+              <Button
+                variant="secondary"
+                size="md"
+                onClick={() => avatarInputRef.current?.click()}
+                className="mx-auto flex items-center gap-2"
+                disabled={saving}
+              >
+                <Camera className="h-4 w-4" />
+                Change photo
+              </Button>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarSelect}
               />
-            ) : (
-              <p className="mt-6 text-gray-600 leading-7">
-                {profile.about_me?.trim() || 'You have not added an about section yet. Add a short bio to let people know what you care about.'}
-              </p>
-            )}
-          </div>
+            </div>
 
-          <div className="rounded-xl border border-gray-100 bg-white p-6">
-            <h2 className="text-xl font-semibold text-gray-900">Profile details</h2>
-            <div className="mt-6 space-y-4">
-              <div className="flex items-center justify-between rounded-3xl border border-gray-100 bg-gray-50 p-4">
-                <span className="text-sm text-gray-500">Full name</span>
-                <span className="font-medium text-gray-900">{profile.user.first_name} {profile.user.last_name}</span>
+            <div className="grid gap-5">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <LabeledField label="First name">
+                  <input
+                    value={form.first_name}
+                    onChange={(e) => setForm({ ...form, first_name: e.target.value })}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </LabeledField>
+                <LabeledField label="Last name">
+                  <input
+                    value={form.last_name}
+                    onChange={(e) => setForm({ ...form, last_name: e.target.value })}
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </LabeledField>
               </div>
-              <div className="flex items-center justify-between rounded-3xl border border-gray-100 bg-gray-50 p-4">
-                <span className="text-sm text-gray-500">Nickname</span>
-                <span className="font-medium text-gray-900">{profile.user.nickname || 'Not set'}</span>
-              </div>
-              <div className="flex items-center justify-between rounded-3xl border border-gray-100 bg-gray-50 p-4">
-                <span className="text-sm text-gray-500">Birthday</span>
-                {isEditing && form ? (
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <LabeledField label="Nickname">
+                  <input
+                    value={form.nickname}
+                    onChange={(e) => setForm({ ...form, nickname: e.target.value })}
+                    placeholder="Optional"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </LabeledField>
+                <LabeledField label="Birthday">
                   <input
                     type="date"
                     value={form.dob}
                     onChange={(e) => setForm({ ...form, dob: e.target.value })}
-                    className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
+                </LabeledField>
+              </div>
+
+              <LabeledField label="About me">
+                <textarea
+                  value={form.about_me}
+                  onChange={(e) => setForm({ ...form, about_me: e.target.value })}
+                  rows={5}
+                  placeholder="Tell people a bit about yourself..."
+                  className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </LabeledField>
+
+              <label className="flex items-start justify-between gap-4 rounded-xl border border-gray-100 bg-gray-50 p-4">
+                <span>
+                  <span className="block text-sm font-semibold text-gray-900">Public profile</span>
+                  <span className="mt-1 block text-sm text-gray-500">
+                    Public profiles can be viewed by anyone. Private profiles show full details only to followers.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={form.is_public}
+                  onChange={(e) => setForm({ ...form, is_public: e.target.checked })}
+                  className="mt-1 h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white rounded-xl border border-gray-100 p-6">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-center gap-5">
+            <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-xl bg-indigo-100 text-3xl font-bold text-indigo-700">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt={name} className="h-full w-full object-cover" />
+              ) : (
+                getInitials(profile.user)
+              )}
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">{name}</h1>
+              <div className="mt-1 flex flex-wrap items-center gap-3 text-sm text-gray-500">
+                <span>{handle}</span>
+                {email && (
+                  <span className="inline-flex items-center gap-1">
+                    <Mail className="h-4 w-4" />
+                    {email}
+                  </span>
+                )}
+              </div>
+
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-sm text-gray-600">
+                {profile.user.is_public ? (
+                  <Globe2 className="w-4 h-4 text-emerald-500" />
                 ) : (
-                  <span className="font-medium text-gray-900">{formatDate(profile.dob)}</span>
+                  <Lock className="w-4 h-4 text-amber-500" />
+                )}
+                {profile.user.is_public ? 'Public profile' : 'Private profile'}
+              </div>
+            </div>
+          </div>
+
+          {isOwnProfile ? (
+            <Button variant="secondary" size="lg" onClick={startEditing} className="flex items-center gap-2">
+              <Pencil className="w-4 h-4" />
+              Edit profile
+            </Button>
+          ) : (
+            <Button
+              variant={isFollowing ? 'secondary' : 'primary'}
+              size="lg"
+              onClick={handleFollowToggle}
+              disabled={followLoading || profile.follow_request_status === 'pending'}
+              className="flex items-center gap-2"
+            >
+              {isFollowing ? <UserMinus className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+              {profile.follow_request_status === 'pending'
+                ? 'Requested'
+                : isFollowing
+                  ? 'Unfollow'
+                  : 'Follow'}
+            </Button>
+          )}
+        </div>
+
+        <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          <StatButton
+            label="Followers"
+            value={profile.follower_count}
+            onClick={() => openStatsPanel('followers')}
+          />
+          <StatButton
+            label="Following"
+            value={profile.following_count}
+            onClick={() => openStatsPanel('following')}
+          />
+          <StatButton
+            label="Posts"
+            value={profile.post_count}
+            onClick={() => openStatsPanel('posts')}
+          />
+        </div>
+      </div>
+
+      {isPrivateLimited ? (
+        <div className="rounded-xl border border-gray-100 bg-white p-8 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+            <Lock className="h-6 w-6" />
+          </div>
+          <h2 className="mt-4 text-xl font-semibold text-gray-900">This profile is private</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-gray-500">
+            Follow this person to see their about section, birthday, and more profile details.
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-4">
+            <div className="rounded-xl border border-gray-100 bg-white p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">About</h2>
+                  <p className="text-sm text-gray-500 mt-1">A quick summary of this profile.</p>
+                </div>
+                <Sparkles className="w-5 h-5 text-indigo-500" />
+              </div>
+              <p className="mt-6 text-gray-600 leading-7">
+                {profile.about_me?.trim() || 'No about section has been added yet.'}
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-gray-100 bg-white p-6">
+              <h2 className="text-xl font-semibold text-gray-900">Profile details</h2>
+              <div className="mt-6 space-y-4">
+                <DetailRow label="Full name" value={`${profile.user.first_name} ${profile.user.last_name}`} />
+                <DetailRow label="Nickname" value={profile.user.nickname || 'Not set'} />
+                {email && <DetailRow label="Email" value={email} icon={<Mail className="h-4 w-4" />} />}
+                <DetailRow label="Birthday" value={formatDate(profile.dob)} icon={<Calendar className="h-4 w-4" />} />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-xl border border-gray-100 bg-white p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900">Profile summary</h2>
+                  <p className="text-sm text-gray-500 mt-1">Activity at a glance.</p>
+                </div>
+                <Users className="w-5 h-5 text-indigo-500" />
+              </div>
+
+              <div className="mt-6 grid gap-4">
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-sm text-gray-500">Visibility</p>
+                  <p className="mt-2 font-semibold text-gray-900">
+                    {profile.user.is_public ? 'Open to everyone' : 'Only visible to followers'}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-sm text-gray-500">Birthday on file</p>
+                  <p className="mt-2 font-semibold text-gray-900">
+                    {profile.dob ? formatDate(profile.dob) : 'Date not available'}
+                  </p>
+                </div>
+                {isOwnProfile && (
+                  <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                    <p className="text-sm text-gray-500">Owner status</p>
+                    <p className="mt-2 inline-flex items-center gap-2 font-semibold text-gray-900">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                      This is your profile
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
           </div>
         </div>
+      )}
 
-        <div className="space-y-4">
-          <div className="rounded-xl border border-gray-100 bg-white p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900">Profile summary</h2>
-                <p className="text-sm text-gray-500 mt-1">Your profile activity at a glance.</p>
-              </div>
-              <Users className="w-5 h-5 text-indigo-500" />
-            </div>
+      {panel && <StatsPanelDialog panel={panel} onClose={() => setPanel(null)} />}
+    </div>
+  );
+}
 
-            <div className="mt-6 grid gap-4">
-              <div className="rounded-3xl border border-gray-100 bg-gray-50 p-4">
-                <p className="text-sm text-gray-500">Visibility</p>
-                <p className="mt-2 font-semibold text-gray-900">{profile.user.is_public ? 'Open to everyone' : 'Only visible to your followers'}</p>
-              </div>
-              <div className="rounded-3xl border border-gray-100 bg-gray-50 p-4">
-                <p className="text-sm text-gray-500">Birthday on file</p>
-                <p className="mt-2 font-semibold text-gray-900">{profile.dob ? formatDate(profile.dob) : 'Date not available'}</p>
-              </div>
-            </div>
+function LabeledField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-sm font-medium text-gray-700">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function StatButton({
+  label,
+  value,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-xl border border-gray-100 bg-gray-50 p-5 text-left transition-colors hover:border-indigo-100 hover:bg-indigo-50/40 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+    >
+      <p className="text-sm text-gray-500">{label}</p>
+      <p className="mt-2 text-3xl font-semibold text-gray-900">{value.toLocaleString()}</p>
+    </button>
+  );
+}
+
+function DetailRow({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-gray-100 bg-gray-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <span className="text-sm text-gray-500">{label}</span>
+      <span className="inline-flex items-center gap-2 font-medium text-gray-900">
+        {icon}
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function StatsPanelDialog({
+  panel,
+  onClose,
+}: {
+  panel: StatsPanelState;
+  onClose: () => void;
+}) {
+  const title =
+    panel.type === 'followers' ? 'Followers' : panel.type === 'following' ? 'Following' : 'Posts';
+  const hasItems = panel.type === 'posts' ? panel.posts.length > 0 : panel.users.length > 0;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-6">
+      <div className="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-gray-100 bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+            <p className="text-sm text-gray-500">Profile {title.toLowerCase()}</p>
           </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto p-6">
+          {panel.loading && (
+            <div className="space-y-3">
+              {[1, 2, 3].map((item) => (
+                <div key={item} className="h-16 animate-pulse rounded-xl bg-gray-100" />
+              ))}
+            </div>
+          )}
+
+          {!panel.loading && panel.error && (
+            <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-600">
+              {panel.error}
+            </div>
+          )}
+
+          {!panel.loading && !panel.error && !hasItems && (
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-8 text-center">
+              <p className="text-sm text-gray-500">Nothing to show yet.</p>
+            </div>
+          )}
+
+          {!panel.loading && !panel.error && panel.type !== 'posts' && (
+            <div className="space-y-3">
+              {panel.users.map((user) => (
+                <div
+                  key={user.id}
+                  className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3"
+                >
+                  <Avatar user={user} />
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-gray-900">{getDisplayName(user)}</p>
+                    <p className="truncate text-sm text-gray-500">
+                      @{user.first_name.toLowerCase()}{user.last_name.toLowerCase()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!panel.loading && !panel.error && panel.type === 'posts' && (
+            <div className="space-y-3">
+              {panel.posts.map((post) => (
+                <div key={post.id} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                  <div className="mb-2 flex items-center gap-2 text-sm text-gray-500">
+                    <FileText className="h-4 w-4" />
+                    {formatShortDate(post.created_at)}
+                  </div>
+                  <p className="text-sm leading-6 text-gray-700">
+                    {post.content?.trim() || 'Image post'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function Avatar({ user }: { user: PublicUser }) {
+  const avatarUrl = resolveAssetUrl(user.avatar_path);
+
+  if (avatarUrl) {
+    return <img src={avatarUrl} alt={getDisplayName(user)} className="h-11 w-11 rounded-full object-cover" />;
+  }
+
+  return (
+    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-sm font-semibold text-indigo-700">
+      {getInitials(user)}
     </div>
   );
 }

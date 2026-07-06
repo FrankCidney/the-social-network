@@ -112,13 +112,27 @@ func TestGetProfile(t *testing.T) {
 					AboutMe:   "Secret bio",
 					IsPublic:  false,
 				})
+				_, _ = db.Exec(
+					`INSERT INTO posts (id, user_id, content, privacy, created_at)
+					 VALUES ('post-1', ?, 'hello', 'public', datetime('now'))`,
+					targetID,
+				)
 			},
 			assertRes: func(t *testing.T, profile *models.Profile) {
 				if profile.User.ID != targetID {
 					t.Errorf("expected ID %q, got %q", targetID, profile.User.ID)
 				}
+				if !profile.IsOwnProfile {
+					t.Error("owner profile should be marked as own profile")
+				}
+				if profile.Email != "target@example.com" {
+					t.Errorf("owner should see email, got %q", profile.Email)
+				}
 				if profile.AboutMe != "Secret bio" || !strings.HasPrefix(profile.DOB, "1990-01-01") {
 					t.Error("owner should see full profile info")
+				}
+				if profile.PostCount != 1 {
+					t.Errorf("expected post count 1, got %d", profile.PostCount)
 				}
 			},
 		},
@@ -139,6 +153,12 @@ func TestGetProfile(t *testing.T) {
 				})
 			},
 			assertRes: func(t *testing.T, profile *models.Profile) {
+				if profile.IsOwnProfile {
+					t.Error("public non-owner profile should not be marked as own profile")
+				}
+				if profile.Email != "" {
+					t.Errorf("non-owner should not see email, got %q", profile.Email)
+				}
 				if profile.AboutMe != "Public bio" || !strings.HasPrefix(profile.DOB, "1990-01-01") {
 					t.Error("anyone should see full profile of public user")
 				}
@@ -166,6 +186,12 @@ func TestGetProfile(t *testing.T) {
 				_ = follows.CreateFollower(viewerID, targetID)
 			},
 			assertRes: func(t *testing.T, profile *models.Profile) {
+				if !profile.IsFollowing {
+					t.Error("confirmed follower should be marked as following")
+				}
+				if profile.Email != "" {
+					t.Errorf("follower should not see email, got %q", profile.Email)
+				}
 				if profile.AboutMe != "Secret bio" || !strings.HasPrefix(profile.DOB, "1990-01-01") {
 					t.Error("confirmed follower should see full profile")
 				}
@@ -190,6 +216,45 @@ func TestGetProfile(t *testing.T) {
 			assertRes: func(t *testing.T, profile *models.Profile) {
 				if profile.AboutMe != "" || profile.DOB != "" {
 					t.Error("non-follower should NOT see about me or dob on private profile")
+				}
+				if profile.IsFollowing {
+					t.Error("non-follower should not be marked as following")
+				}
+				if profile.Email != "" {
+					t.Errorf("non-owner should not see email, got %q", profile.Email)
+				}
+			},
+		},
+		{
+			name:     "Private profile with pending follow request",
+			viewerID: viewerID,
+			targetID: targetID,
+			setupDB: func(t *testing.T, db *sql.DB, users repository.UserRepository, follows repository.FollowRepository) {
+				_ = users.CreateUser(&models.User{
+					ID:    viewerID,
+					Email: "viewer@example.com",
+				})
+				_ = users.CreateUser(&models.User{
+					ID:        targetID,
+					Email:     "target@example.com",
+					Password:  "hash",
+					FirstName: "Target",
+					LastName:  "User",
+					DOB:       "1990-01-01",
+					AboutMe:   "Secret bio",
+					IsPublic:  false,
+				})
+				_ = follows.CreateFollowRequest(viewerID, targetID)
+			},
+			assertRes: func(t *testing.T, profile *models.Profile) {
+				if profile.FollowRequestStatus != "pending" {
+					t.Errorf("expected pending follow request, got %q", profile.FollowRequestStatus)
+				}
+				if profile.IsFollowing {
+					t.Error("pending request should not be marked as following")
+				}
+				if profile.AboutMe != "" || profile.DOB != "" {
+					t.Error("pending requester should not see private profile details")
 				}
 			},
 		},
@@ -227,12 +292,13 @@ func TestGetProfile(t *testing.T) {
 			db := setupTestDB(t)
 			users := repository.NewUserRepository(db)
 			follows := repository.NewFollowRepository(db)
+			posts := repository.NewPostRepository(db)
 
 			if tt.setupDB != nil {
 				tt.setupDB(t, db, users, follows)
 			}
 
-			svc := NewService(users, follows)
+			svc := NewService(users, follows, posts)
 			res, err := svc.GetProfile(tt.viewerID, tt.targetID)
 
 			if tt.assertErr != nil {

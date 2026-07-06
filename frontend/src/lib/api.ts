@@ -80,6 +80,7 @@ export type AuthResponse = {
 
 export type PublicUser = {
 	id: string;
+	email?: string;
 	first_name: string;
 	last_name: string;
 	nickname?: string;
@@ -106,11 +107,15 @@ export type PostListResponse = {
 
 export type ProfileResponse = {
 	user: PublicUser;
+	email?: string;
 	about_me?: string;
 	dob?: string;
 	follower_count: number;
 	following_count: number;
 	post_count: number;
+	is_own_profile?: boolean;
+	is_following?: boolean;
+	follow_request_status?: 'pending' | 'accepted' | 'declined';
 };
 
 export type UpdateProfilePayload = {
@@ -203,6 +208,10 @@ export const profileAPI = {
 		return request<ProfileResponse>('/api/profile');
 	},
 
+	getProfile(userId: string) {
+		return request<ProfileResponse>(`/api/profile/${userId}`);
+	},
+
 	async updateProfile(payload: UpdateProfilePayload) {
 		await request<void>('/api/profile', {
 			method: 'PUT',
@@ -229,6 +238,28 @@ export const profileAPI = {
 		const query = params.toString();
 		return request<FollowListResponse>(`/api/users/${userId}/followers${query ? `?${query}` : ''}`);
 	},
+
+	getFollowing(userId: string, limit?: number, offset?: number) {
+		const params = new URLSearchParams();
+		if (limit !== undefined) params.set('limit', String(limit));
+		if (offset !== undefined) params.set('offset', String(offset));
+		const query = params.toString();
+		return request<FollowListResponse>(`/api/users/${userId}/following${query ? `?${query}` : ''}`);
+	},
+};
+
+export const followAPI = {
+	follow(userId: string) {
+		return request<void>(`/api/follow/${userId}`, {
+			method: 'POST',
+		});
+	},
+
+	unfollow(userId: string) {
+		return request<void>(`/api/follow/${userId}`, {
+			method: 'DELETE',
+		});
+	},
 };
 
 export const feedAPI = {
@@ -249,6 +280,14 @@ export const feedAPI = {
 
 	getPost(postId: string) {
 		return request<PostResponse>(`/api/posts/${postId}`);
+	},
+
+	getUserPosts(userId: string, limit?: number, offset?: number) {
+		const params = new URLSearchParams();
+		if (limit !== undefined) params.set('limit', String(limit));
+		if (offset !== undefined) params.set('offset', String(offset));
+		const query = params.toString();
+		return request<PostListResponse>(`/api/users/${userId}/posts${query ? `?${query}` : ''}`);
 	},
 
 	uploadPostImage(postId: string, file: File) {
