@@ -1,5 +1,7 @@
 package models
 
+import "time"
+
 type AuthResponse struct {
 	User  *PublicUser `json:"user"`
 	Token string      `json:"token"`
@@ -40,6 +42,17 @@ type FollowRequestResponse struct {
 	SenderID   string `json:"sender_id"`
 	ReceiverID string `json:"receiver_id"`
 	Status     string `json:"status"`
+}
+
+type GroupDetailResponse struct {
+	ID               string      `json:"id"`
+	CreatorID        string      `json:"creator_id"`
+	Title            string      `json:"title"`
+	Description      string      `json:"description"`
+	CreatedAt        time.Time   `json:"created_at"`
+	Creator          *PublicUser `json:"creator"`
+	IsCreator        bool        `json:"is_creator"`
+	MembershipStatus string      `json:"membership_status"`
 }
 
 type PostResponse struct {

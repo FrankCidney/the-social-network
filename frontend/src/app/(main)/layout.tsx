@@ -13,6 +13,7 @@ export default function MainLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const isGroupsRoute = pathname.startsWith('/groups');
 
   return (
     <WebSocketProvider>
@@ -46,7 +47,7 @@ export default function MainLayout({
         {/* Sidebar */}
         <aside className="hidden md:block md:col-span-3 space-y-2">
           <SidebarItem icon={<Home className="w-5 h-5" />} label="Home Feed" href="/feed" active={pathname === '/feed'} />
-          <SidebarItem icon={<Users className="w-5 h-5" />} label="Groups" href="/groups" active={pathname === '/groups'} />
+          <SidebarItem icon={<Users className="w-5 h-5" />} label="Groups" href="/groups" active={pathname.startsWith('/groups')} />
           <SidebarItem icon={<MessageSquare className="w-5 h-5" />} label="Messages" href="/messages" active={pathname === '/messages'} />
           <SidebarItem icon={<Bell className="w-5 h-5" />} label="Notifications" href="/notifications" active={pathname === '/notifications'} />
           <SidebarItem icon={<User className="w-5 h-5" />} label="Profile" href="/profile" active={pathname === '/profile'} />
@@ -55,11 +56,12 @@ export default function MainLayout({
         </aside>
 
           {/* Main Content */}
-          <main className="md:col-span-6">
+          <main className={isGroupsRoute ? 'md:col-span-9' : 'md:col-span-6'}>
             {children}
           </main>
 
           {/* Right Sidebar (Suggestions/Trends) */}
+          {!isGroupsRoute && (
           <aside className="hidden lg:block lg:col-span-3 space-y-6">
             <div className="bg-white rounded-xl border border-gray-100 p-4">
               <h3 className="font-bold text-gray-900 mb-4">Who to follow</h3>
@@ -79,6 +81,7 @@ export default function MainLayout({
               </div>
             </div>
           </aside>
+          )}
         </div>
       </div>
     </WebSocketProvider>

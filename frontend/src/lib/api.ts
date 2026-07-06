@@ -195,6 +195,45 @@ export type Group = {
 	created_at: string;
 };
 
+export type GroupDetail = Group & {
+	creator: PublicUser;
+	is_creator: boolean;
+	membership_status: 'none' | 'invited' | 'requested' | 'accepted' | 'declined';
+};
+
+export type CreateGroupPayload = {
+	title: string;
+	description: string;
+};
+
+export type GroupEvent = {
+	id: string;
+	group_id: string;
+	creator_id: string;
+	title: string;
+	description: string;
+	event_date: string;
+	created_at: string;
+};
+
+export type CreateGroupEventPayload = {
+	title: string;
+	description: string;
+	event_date: string;
+};
+
+export type InviteUserPayload = {
+	invitee_id: string;
+};
+
+export type GroupMessage = {
+	id: string;
+	sender_id: string;
+	group_id?: string;
+	content: string;
+	created_at: string;
+};
+
 export const authAPI = {
 	register(payload: RegisterPayload) {
 		return request<AuthResponse>('/api/auth/register', {
@@ -213,7 +252,81 @@ export const authAPI = {
 
 export const groupAPI = {
 	getGroups() {
-		return request<Group[] | { groups?: Group[] }>('/api/groups');
+		return request<Group[] | { groups?: Group[] } | null>('/api/groups');
+	},
+
+	getGroup(groupId: string) {
+		return request<GroupDetail>(`/api/groups/${groupId}`);
+	},
+
+	createGroup(payload: CreateGroupPayload) {
+		return request<Group>('/api/groups', {
+			method: 'POST',
+			body: payload,
+		});
+	},
+
+	requestJoin(groupId: string) {
+		return request<{ message: string }>(`/api/groups/${groupId}/join`, {
+			method: 'POST',
+		});
+	},
+
+	getEvents(groupId: string) {
+		return request<GroupEvent[] | null>(`/api/groups/${groupId}/events`);
+	},
+
+	createEvent(groupId: string, payload: CreateGroupEventPayload) {
+		return request<GroupEvent>(`/api/groups/${groupId}/events`, {
+			method: 'POST',
+			body: payload,
+		});
+	},
+
+	getMembers(groupId: string) {
+		return request<PublicUser[] | null>(`/api/groups/${groupId}/members`);
+	},
+
+	inviteUser(groupId: string, payload: InviteUserPayload) {
+		return request<{ message: string }>(`/api/groups/${groupId}/invite`, {
+			method: 'POST',
+			body: payload,
+		});
+	},
+
+	acceptInvite(groupId: string) {
+		return request<void>(`/api/groups/${groupId}/invite/accept`, {
+			method: 'POST',
+		});
+	},
+
+	declineInvite(groupId: string) {
+		return request<void>(`/api/groups/${groupId}/invite/decline`, {
+			method: 'POST',
+		});
+	},
+
+	getJoinRequests(groupId: string) {
+		return request<PublicUser[] | null>(`/api/groups/${groupId}/requests`);
+	},
+
+	acceptJoinRequest(groupId: string, userId: string) {
+		return request<void>(`/api/groups/${groupId}/requests/${userId}/accept`, {
+			method: 'POST',
+		});
+	},
+
+	declineJoinRequest(groupId: string, userId: string) {
+		return request<void>(`/api/groups/${groupId}/requests/${userId}/decline`, {
+			method: 'POST',
+		});
+	},
+
+	rsvpEvent(eventId: string, status: 'going' | 'not_going') {
+		return request<void>(`/api/events/${eventId}/rsvp`, {
+			method: 'POST',
+			body: { status },
+		});
 	},
 };
 
@@ -304,6 +417,14 @@ export const feedAPI = {
 		return request<PostListResponse>(`/api/users/${userId}/posts${query ? `?${query}` : ''}`);
 	},
 
+	getGroupPosts(groupId: string, limit?: number, offset?: number) {
+		const params = new URLSearchParams();
+		if (limit !== undefined) params.set('limit', String(limit));
+		if (offset !== undefined) params.set('offset', String(offset));
+		const query = params.toString();
+		return request<PostListResponse>(`/api/groups/${groupId}/posts${query ? `?${query}` : ''}`);
+	},
+
 	uploadPostImage(postId: string, file: File) {
 		const formData = new FormData();
 		formData.append('image', file);
@@ -381,7 +502,8 @@ export type ChatMessageListResponse = {
 };
 
 export type SendMessagePayload = {
-	receiver_id: string;
+	receiver_id?: string;
+	group_id?: string;
 	content: string;
 };
 
@@ -408,6 +530,14 @@ export const chatAPI = {
 			method: 'POST',
 			body: payload,
 		});
+	},
+
+	getGroupMessages(groupId: string, limit?: number, offset?: number) {
+		const params = new URLSearchParams();
+		if (limit !== undefined) params.set('limit', String(limit));
+		if (offset !== undefined) params.set('offset', String(offset));
+		const query = params.toString();
+		return request<GroupMessage[] | null>(`/api/groups/${groupId}/messages${query ? `?${query}` : ''}`);
 	},
 
 	// Mark all messages from a user as read.

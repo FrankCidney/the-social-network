@@ -14,6 +14,7 @@ type GroupRepository interface {
 	GetGroupByID(id string) (*models.Group, error)
 	CreateGroupMember(groupID, userID, status string) error
 	GetGroupMembers(groupID string) ([]*models.User, error)
+	GetGroupMembersByStatus(groupID, status string) ([]*models.User, error)
 	GetGroupMemberStatus(groupID, userID string) (string, error)
 	CreateEvent(event *models.Event) error
 	GetGroupEvents(groupID string) ([]*models.Event, error)
@@ -86,16 +87,24 @@ func (r *sqliteGroupRepo) CreateGroupMember(groupID, userID, status string) erro
 }
 
 func (r *sqliteGroupRepo) GetGroupMembers(groupID string) ([]*models.User, error) {
+	return r.getGroupMembersByStatus(groupID, "accepted")
+}
+
+func (r *sqliteGroupRepo) GetGroupMembersByStatus(groupID, status string) ([]*models.User, error) {
+	return r.getGroupMembersByStatus(groupID, status)
+}
+
+func (r *sqliteGroupRepo) getGroupMembersByStatus(groupID, status string) ([]*models.User, error) {
 	const query = `
 		SELECT u.id, u.email, u.first_name, u.last_name, u.dob,
 		       COALESCE(u.nickname, ''), COALESCE(u.about_me, ''), COALESCE(u.avatar_path, ''),
 		       u.is_public, u.created_at
 		FROM group_members gm
 		JOIN users u ON u.id = gm.user_id
-		WHERE gm.group_id = ? AND gm.status = 'accepted'
+		WHERE gm.group_id = ? AND gm.status = ?
 		ORDER BY gm.created_at DESC`
-	
-	rows, err := r.db.Query(query, groupID)
+
+	rows, err := r.db.Query(query, groupID, status)
 	if err != nil {
 		return nil, fmt.Errorf("get group members: %w", err)
 	}

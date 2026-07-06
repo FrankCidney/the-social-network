@@ -58,9 +58,9 @@ func main() {
 	authService := auth.NewService(userRepo, sessionRepo)
 	userService := user.NewService(userRepo, followRepo, postRepo)
 	followService := follow.NewService(userRepo, followRepo, wsNotifier)
-	groupService := groups.NewService(groupRepo, wsNotifier)
+	groupService := groups.NewService(groupRepo, userRepo, wsNotifier)
 	chatService := chat.NewService(msgRepo, groupRepo, followRepo, wsNotifier)
-	postService := post.NewService(postRepo, userRepo, followRepo, nil) // TODO: Wire in GroupMembership after groups is done. Group posts are unreachable until wired in.
+	postService := post.NewService(postRepo, userRepo, followRepo, groupService)
 	commentService := comment.NewService(commentRepo, userRepo, postService)
 
 	// Handlers

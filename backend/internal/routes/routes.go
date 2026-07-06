@@ -84,10 +84,18 @@ func registerGroupRoutes(mux *http.ServeMux, h *handlers.GroupHandler, authServi
 	mux.Handle("POST /api/groups", middleware.RequireAuth(authService, http.HandlerFunc(h.CreateGroup)))
 	mux.Handle("GET /api/groups", middleware.RequireAuth(authService, http.HandlerFunc(h.GetGroups)))
 	mux.Handle("GET /api/groups/{id}", middleware.RequireAuth(authService, http.HandlerFunc(h.GetGroup)))
+	mux.Handle("GET /api/groups/{id}/members", middleware.RequireAuth(authService, http.HandlerFunc(h.GetMembers)))
 	mux.Handle("POST /api/groups/{id}/join", middleware.RequireAuth(authService, http.HandlerFunc(h.RequestJoin)))
+	mux.Handle("POST /api/groups/{id}/invite", middleware.RequireAuth(authService, http.HandlerFunc(h.InviteUser)))
+	mux.Handle("POST /api/groups/{id}/invite/accept", middleware.RequireAuth(authService, http.HandlerFunc(h.AcceptInvite)))
+	mux.Handle("POST /api/groups/{id}/invite/decline", middleware.RequireAuth(authService, http.HandlerFunc(h.DeclineInvite)))
+	mux.Handle("GET /api/groups/{id}/requests", middleware.RequireAuth(authService, http.HandlerFunc(h.GetJoinRequests)))
+	mux.Handle("POST /api/groups/{id}/requests/{userId}/accept", middleware.RequireAuth(authService, http.HandlerFunc(h.AcceptJoinRequest)))
+	mux.Handle("POST /api/groups/{id}/requests/{userId}/decline", middleware.RequireAuth(authService, http.HandlerFunc(h.DeclineJoinRequest)))
 
 	mux.Handle("POST /api/groups/{id}/events", middleware.RequireAuth(authService, http.HandlerFunc(h.CreateEvent)))
 	mux.Handle("GET /api/groups/{id}/events", middleware.RequireAuth(authService, http.HandlerFunc(h.GetEvents)))
+	mux.Handle("POST /api/events/{id}/rsvp", middleware.RequireAuth(authService, http.HandlerFunc(h.RSVPEvent)))
 }
 
 func registerChatRoutes(mux *http.ServeMux, h *handlers.ChatHandler, authService auth.Service) {

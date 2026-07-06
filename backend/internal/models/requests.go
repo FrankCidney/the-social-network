@@ -26,7 +26,7 @@ type UpdateProfileRequest struct {
 
 type CreatePostRequest struct {
 	Content   string   `json:"content,omitempty"`
-	Privacy   string   `json:"privacy"` // public | almost_private | private | group
+	Privacy   string   `json:"privacy"`              // public | almost_private | private | group
 	VisibleTo []string `json:"visible_to,omitempty"` // only used when privacy == private
 	GroupID   *string  `json:"group_id,omitempty"`
 }
@@ -53,4 +53,12 @@ type CreateEventRequest struct {
 	Title       string `json:"title"`
 	Description string `json:"description"`
 	EventDate   string `json:"event_date"` // expected ISO8601
+}
+
+type InviteUserRequest struct {
+	InviteeID string `json:"invitee_id"`
+}
+
+type EventRSVPRequest struct {
+	Status string `json:"status"`
 }

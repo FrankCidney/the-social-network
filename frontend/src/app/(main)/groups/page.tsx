@@ -1,167 +1,241 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { Users, Plus, Search, Globe, Loader } from 'lucide-react';
+import {
+	ArrowRight,
+	Globe,
+	Loader,
+	Plus,
+	ShieldCheck,
+	Users,
+} from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { groupAPI } from '@/lib/api';
+import { Input } from '@/components/ui/Input';
+import { type Group, groupAPI } from '@/lib/api';
 
-type Group = {
-  id: string;
-  creator_id: string;
-  title: string;
-  description: string;
-  created_at: string;
+type CreateGroupFormState = {
+	title: string;
+	description: string;
 };
 
+const INITIAL_CREATE_FORM: CreateGroupFormState = {
+	title: '',
+	description: '',
+};
+
+function normalizeGroupsResponse(response: Group[] | { groups?: Group[] } | null) {
+	if (Array.isArray(response)) {
+		return response;
+	}
+
+	if (response && Array.isArray(response.groups)) {
+		return response.groups;
+	}
+
+	return [];
+}
+
 export default function GroupsPage() {
-  const [searchQuery, setSearchQuery] = React.useState('');
-  const [groups, setGroups] = React.useState<Group[]>([]);
-  const [isLoading, setIsLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
+	const router = useRouter();
+	const [groups, setGroups] = React.useState<Group[]>([]);
+	const [isLoading, setIsLoading] = React.useState(true);
+	const [error, setError] = React.useState<string | null>(null);
+	const [isCreateOpen, setIsCreateOpen] = React.useState(false);
+	const [createForm, setCreateForm] = React.useState(INITIAL_CREATE_FORM);
+	const [createError, setCreateError] = React.useState<string | null>(null);
+	const [isCreating, setIsCreating] = React.useState(false);
 
-  React.useEffect(() => {
-    const fetchGroups = async () => {
-      try {
-        // Backend integration point: fetch the list of groups from the API here.
-        const response = await groupAPI.getGroups();
-        const groupList = Array.isArray(response)
-          ? response
-          : response.groups ?? [];
+	React.useEffect(() => {
+		const fetchGroups = async () => {
+			try {
+				const response = await groupAPI.getGroups();
+				setGroups(normalizeGroupsResponse(response));
+			} catch (err) {
+				setError(err instanceof Error ? err.message : 'Failed to load groups');
+			} finally {
+				setIsLoading(false);
+			}
+		};
 
-        setGroups(groupList);
-      } catch (err) {
-        // Backend integration point: surface any API/network errors here.
-        setError(err instanceof Error ? err.message : 'Failed to load groups');
-      } finally {
-        setIsLoading(false);
-      }
-    };
+		void fetchGroups();
+	}, []);
 
-    fetchGroups();
-  }, []);
+	const handleCreateGroup = async (event: React.FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
 
-  const filteredGroups = groups.filter((group) =>
-    group.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    group.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+		const title = createForm.title.trim();
+		const description = createForm.description.trim();
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader className="w-8 h-8 text-indigo-600 animate-spin" />
-      </div>
-    );
-  }
+		if (!title) {
+			setCreateError('A group title is required.');
+			return;
+		}
 
-  if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-red-600">
-        <p className="font-bold">Error loading groups</p>
-        <p className="text-sm mt-1">{error}</p>
-      </div>
-    );
-  }
+		setIsCreating(true);
+		setCreateError(null);
 
-  return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-xl border border-gray-100 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="p-2 bg-indigo-100 rounded-lg">
-                <Users className="w-6 h-6 text-indigo-600" />
-              </div>
-              Groups
-            </h1>
-            <p className="text-gray-500 text-sm mt-2">
-              Discover communities and connect with people who share your interests.
-            </p>
-          </div>
-          <Button variant="primary" size="lg" className="flex items-center gap-2">
-            <Plus className="w-5 h-5" />
-            {/* Backend integration point: connect this action to the create-group endpoint. */}
-            Create Group
-          </Button>
-        </div>
+		try {
+			const createdGroup = await groupAPI.createGroup({ title, description });
+			setGroups((current) => [createdGroup, ...current]);
+			setCreateForm(INITIAL_CREATE_FORM);
+			setIsCreateOpen(false);
+			router.push(`/groups/${createdGroup.id}`);
+		} catch (err) {
+			setCreateError(err instanceof Error ? err.message : 'Failed to create group');
+		} finally {
+			setIsCreating(false);
+		}
+	};
 
-        <div className="grid gap-4 sm:grid-cols-2 items-center">
-          <div>
-            <p className="text-sm text-gray-500">Browse available groups</p>
-            <p className="text-xl font-semibold text-gray-900">{groups.length.toLocaleString()} groups available</p>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search groups by name or interest..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-gray-50 border border-gray-200 rounded-lg pl-10 pr-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-            />
-          </div>
-        </div>
-      </div>
+	if (isLoading) {
+		return (
+			<div className="flex min-h-[24rem] items-center justify-center rounded-[28px] border border-gray-100 bg-white">
+				<Loader className="h-8 w-8 animate-spin text-indigo-600" />
+			</div>
+		);
+	}
 
-      <div className="space-y-4">
-        {filteredGroups.length > 0 ? (
-          filteredGroups.map((group, index) => (
-            <motion.div
-              key={group.id}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.05 }}
-              className="bg-white rounded-xl border border-gray-100 overflow-hidden hover:border-gray-200 transition-colors"
-            >
-              <div className="p-6">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-4 flex-1">
-                    <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center flex-shrink-0">
-                      <span className="text-white font-bold text-xl">{group.title.charAt(0).toUpperCase()}</span>
-                    </div>
+	if (error) {
+		return (
+			<div className="rounded-[28px] border border-red-200 bg-red-50 p-6 text-red-600">
+				<p className="font-bold">Error loading groups</p>
+				<p className="mt-1 text-sm">{error}</p>
+			</div>
+		);
+	}
 
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-lg font-bold text-gray-900">{group.title}</h3>
-                        <span title="Public community">
-                          <Globe className="w-4 h-4 text-gray-400" />
-                        </span>
-                      </div>
-                      <p className="text-gray-600 text-sm mb-3">{group.description}</p>
-                      <div className="flex items-center gap-4 text-xs text-gray-500">
-                        <span className="flex items-center gap-1">
-                          <Users className="w-4 h-4" />
-                          Created {new Date(group.created_at).toLocaleDateString('en-US', {
-                            year: 'numeric',
-                            month: 'short',
-                            day: 'numeric',
-                          })}
-                        </span>
-                        <span className="rounded-full bg-gray-100 px-2 py-1">Creator: {group.creator_id}</span>
-                      </div>
-                    </div>
-                  </div>
+	return (
+		<div className="space-y-6">
+			<section className="overflow-hidden rounded-[28px] border border-gray-100 bg-white">
+				<div className="px-6 py-7 lg:px-8">
+					<div className="space-y-5">
+						<div className="flex flex-wrap items-center justify-between gap-4">
+							<div>
+								<h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+									Groups
+								</h1>
+							</div>
+							<Button
+								type="button"
+								variant={isCreateOpen ? 'secondary' : 'primary'}
+								size="md"
+								onClick={() => {
+									setIsCreateOpen((current) => !current);
+									setCreateError(null);
+								}}
+								className="shrink-0"
+							>
+								<Plus className="mr-2 h-4 w-4" />
+								{isCreateOpen ? 'Close' : 'Create'}
+							</Button>
+						</div>
 
-                  <Button variant="secondary" size="md">
-                    {/* Backend integration point: route this action to the group details or join flow. */}
-                    View Group
-                  </Button>
-                </div>
-              </div>
-            </motion.div>
-          ))
-        ) : (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="bg-white rounded-xl border border-gray-100 p-12 text-center"
-          >
-            <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-gray-900 mb-2">No groups found</h3>
-            <p className="text-gray-500 text-sm">Try adjusting your search term or check back later.</p>
-          </motion.div>
-        )}
-      </div>
-    </div>
-  );
+						{isCreateOpen ? (
+							<form
+								className="mt-5 space-y-4 rounded-[24px] border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-5"
+								onSubmit={handleCreateGroup}
+							>
+								<Input
+									label="Group title"
+									value={createForm.title}
+									onChange={(event) =>
+										setCreateForm((current) => ({ ...current, title: event.target.value }))
+									}
+									placeholder="Weekend hikers"
+									maxLength={80}
+								/>
+								<div className="space-y-1.5">
+									<label className="ml-1 text-sm font-medium text-gray-700">Description</label>
+									<textarea
+										value={createForm.description}
+										onChange={(event) =>
+											setCreateForm((current) => ({
+												...current,
+												description: event.target.value,
+											}))
+										}
+										placeholder="What brings this community together?"
+										rows={4}
+										className="w-full rounded-bento border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary"
+									/>
+								</div>
+								{createError ? <p className="text-sm text-rose-600">{createError}</p> : null}
+								<div className="flex flex-wrap items-center gap-3">
+									<Button type="submit" disabled={isCreating}>
+										{isCreating ? <Loader className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
+										Create group
+									</Button>
+									<p className="text-xs text-gray-500">
+										The creator is automatically added as a member by the backend.
+									</p>
+								</div>
+							</form>
+						) : null}
+					</div>
+				</div>
+			</section>
+
+			<section className="grid gap-4 xl:grid-cols-2">
+				{groups.length > 0 ? (
+					groups.map((group, index) => (
+						<motion.article
+							key={group.id}
+							initial={{ opacity: 0, y: 18 }}
+							animate={{ opacity: 1, y: 0 }}
+							transition={{ delay: index * 0.04 }}
+							className="rounded-[28px] border border-gray-100 bg-white p-6 shadow-sm transition-colors hover:border-indigo-100"
+						>
+							<div className="flex items-start justify-between gap-4">
+								<div className="flex min-w-0 items-start gap-4">
+									<div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] bg-gradient-to-br from-indigo-500 to-sky-500 text-lg font-bold text-white">
+										{group.title.charAt(0).toUpperCase()}
+									</div>
+									<div className="min-w-0 space-y-3">
+										<div className="flex flex-wrap items-center gap-2">
+											<h2 className="text-xl font-bold text-gray-900">{group.title}</h2>
+											<span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
+												<Globe className="h-3.5 w-3.5" />
+												Browsable
+											</span>
+										</div>
+										<p className="text-sm leading-6 text-gray-600">{group.description || 'No description yet.'}</p>
+										<div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+											<span className="rounded-full bg-gray-100 px-2.5 py-1">
+												Created {new Date(group.created_at).toLocaleDateString()}
+											</span>
+											<span className="rounded-full bg-indigo-50 px-2.5 py-1 text-indigo-700">
+												Creator: {group.creator_id}
+											</span>
+										</div>
+									</div>
+								</div>
+								<ShieldCheck className="mt-1 h-5 w-5 shrink-0 text-indigo-400" />
+							</div>
+
+							<div className="mt-6 flex flex-wrap items-center gap-3">
+								<Button
+									type="button"
+									variant="primary"
+									onClick={() => router.push(`/groups/${group.id}`)}
+								>
+									Open Group
+									<ArrowRight className="ml-2 h-4 w-4" />
+								</Button>
+							</div>
+						</motion.article>
+					))
+				) : (
+					<div className="rounded-[28px] border border-dashed border-gray-200 bg-white px-6 py-12 text-center xl:col-span-2">
+						<Users className="mx-auto h-12 w-12 text-gray-300" />
+						<h3 className="mt-4 text-lg font-bold text-gray-900">No groups yet</h3>
+						<p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-gray-500">
+							Create the first group to get the community area started.
+						</p>
+					</div>
+				)}
+			</section>
+		</div>
+	);
 }
