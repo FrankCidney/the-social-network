@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+
 	"social-network/internal/models"
 )
 
@@ -24,7 +25,7 @@ func (s *SQLiteStore) GetGroups(ctx context.Context) ([]*models.Group, error) {
 	}
 	defer rows.Close()
 
-	var groups []*models.Group
+	groups := make([]*models.Group, 0)
 	for rows.Next() {
 		g := &models.Group{}
 		if err := rows.Scan(&g.ID, &g.CreatorID, &g.Title, &g.Description, &g.CreatedAt); err != nil {

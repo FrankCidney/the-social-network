@@ -66,3 +66,22 @@ func (h *ChatHandler) GetGroupMessages(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, messages)
 }
 
+func (h *ChatHandler) GetConversations(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.UserFromContext(r.Context()).ID
+	conversations, err := h.service.GetConversations(userID)
+	if err != nil {
+		response.Error(w, err, http.StatusBadRequest)
+		return
+	}
+	response.JSON(w, http.StatusOK, conversations)
+}
+
+func (h *ChatHandler) MarkConversationRead(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.UserFromContext(r.Context()).ID
+	otherUserID := r.PathValue("userId")
+	if err := h.service.MarkConversationRead(userID, otherUserID); err != nil {
+		response.Error(w, err, http.StatusBadRequest)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
