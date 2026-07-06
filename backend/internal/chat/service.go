@@ -22,21 +22,23 @@ type Service interface {
 	SendMessage(senderID string, req *SendMessageRequest) (*models.Message, error)
 	GetPrivateMessages(user1ID, user2ID string, limit, offset int) ([]*models.Message, error)
 	GetGroupMessages(userID, groupID string, limit, offset int) ([]*models.Message, error)
+	GetConversations(userID string) ([]*models.Conversation, error)
+	MarkConversationRead(userID, otherUserID string) error
 }
 
 type service struct {
-	msgRepo   repository.MessageRepository
-	groupRepo repository.GroupRepository // for validating group membership
+	msgRepo    repository.MessageRepository
+	groupRepo  repository.GroupRepository  // for validating group membership
 	followRepo repository.FollowRepository // for validating follow status
-	notifier  websocket.Notifier
+	notifier   websocket.Notifier
 }
 
 func NewService(msgRepo repository.MessageRepository, groupRepo repository.GroupRepository, followRepo repository.FollowRepository, notifier websocket.Notifier) Service {
 	return &service{
-		msgRepo:   msgRepo,
-		groupRepo: groupRepo,
+		msgRepo:    msgRepo,
+		groupRepo:  groupRepo,
 		followRepo: followRepo,
-		notifier:  notifier,
+		notifier:   notifier,
 	}
 }
 
@@ -123,4 +125,12 @@ func (s *service) GetGroupMessages(userID, groupID string, limit, offset int) ([
 	}
 
 	return s.msgRepo.GetGroupMessages(groupID, limit, offset)
+}
+
+func (s *service) GetConversations(userID string) ([]*models.Conversation, error) {
+	return s.msgRepo.GetConversations(userID)
+}
+
+func (s *service) MarkConversationRead(userID, otherUserID string) error {
+	return s.msgRepo.MarkConversationRead(userID, otherUserID)
 }
