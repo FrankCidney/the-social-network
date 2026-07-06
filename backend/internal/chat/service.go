@@ -7,6 +7,7 @@ import (
 	"social-network/internal/apperror"
 	"social-network/internal/models"
 	"social-network/internal/repository"
+	"social-network/internal/shared/paginate"
 	"social-network/internal/websocket"
 
 	"github.com/google/uuid"
@@ -92,7 +93,7 @@ func (s *service) SendMessage(senderID string, req *SendMessageRequest) (*models
 	// Broadcast via WebSocket
 	if s.notifier != nil {
 		if m.ReceiverID != nil {
-			// Private message: notify receiver and sender
+			// Private message: notify receiver and sender.
 			s.notifier.NotifyMessage(*m.ReceiverID, m)
 			s.notifier.NotifyMessage(m.SenderID, m)
 		} else if m.GroupID != nil {
@@ -112,10 +113,12 @@ func (s *service) SendMessage(senderID string, req *SendMessageRequest) (*models
 }
 
 func (s *service) GetPrivateMessages(user1ID, user2ID string, limit, offset int) ([]*models.Message, error) {
+	limit, offset = paginate.ClampPagination(limit, offset)
 	return s.msgRepo.GetPrivateMessages(user1ID, user2ID, limit, offset)
 }
 
 func (s *service) GetGroupMessages(userID, groupID string, limit, offset int) ([]*models.Message, error) {
+	limit, offset = paginate.ClampPagination(limit, offset)
 	status, err := s.groupRepo.GetGroupMemberStatus(groupID, userID)
 	if err != nil {
 		return nil, err

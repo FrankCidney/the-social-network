@@ -22,12 +22,12 @@ Status meanings:
 | Environment/API base URL | Done | `NEXT_PUBLIC_API_URL` is wired through `api.ts`; requests include credentials. |
 | Auth register/login | Done | Register and login pages call matching backend routes. |
 | Auth logout | Pending | Backend route exists, but frontend sidebar logout is still just a link to `/login`. |
-| Profile | Partial | Own profile load/update/avatar are integrated; public profile by id and following list still need product decisions/UI. |
-| Follow flows | Pending | Follow/request endpoints exist, but frontend follow UI is still not wired. |
+| Profile | Partial | Own profile load/update/avatar plus public profile by id are integrated. Following list still has no dedicated UI surface beyond stats modal. |
+| Follow flows | Partial | Follow/unfollow/request is wired on profile pages; accept/decline follow requests and broader discovery follow CTAs are still pending. |
 | Feed/posts | Partial | Feed, create post, get post, upload post image, comments, and replies are integrated; edit/delete post still missing. |
 | Comments | Partial | Fetch/create comments and comment image upload are integrated in feed; delete comment is still missing. |
-| Groups/events | Partial | Group browse, create, detail, join, events, creator/member/request state, and RSVP wiring are in place. Known members-fetch backend bug currently blocks the Members tab. |
-| Chat/messages | Partial | Private messages are wired; group chat is now wired inside group detail. Conversations/read helpers exist for messages page. |
+| Groups/events | Partial | Group browse, create, detail, join, members, invite picker, events, creator/member/request state, and RSVP wiring are in place. |
+| Chat/messages | Partial | Private messages are wired, including opening a direct thread from profile/discovery. Group chat remains wired inside group detail. Presence/online status is not implemented. |
 | Notifications | Pending | Frontend has notification HTTP helpers/UI assumptions, but those routes are still not registered in `routes.go`. |
 | WebSocket | Partial | Frontend connects to `/api/ws`. Group and follow notifications depend on backend payload/route coverage beyond the current HTTP work. |
 
@@ -46,19 +46,20 @@ Status meanings:
 | Backend route | Frontend status | Frontend location | Notes |
 | --- | --- | --- | --- |
 | `GET /api/profile` | Done | `profileAPI.getMyProfile`, feed/profile/messages/groups/WebSocket | Used for current user and auth-aware UI state. |
-| `GET /api/profile/{id}` | Pending | None | Needed for viewing another user's profile. |
+| `GET /api/profile/{id}` | Done | `profileAPI.getProfile`, `app/(main)/profile/[id]/page.tsx` | Public/other-user profile route is now wired, including follow and message entry points. |
 | `PUT /api/profile` | Done | `profileAPI.updateProfile`, `app/(main)/profile/page.tsx` | Wrapper updates then refetches `/api/profile` because backend returns `204`. |
 | `POST /api/profile/avatar` | Done | `profileAPI.uploadAvatar`, `app/(main)/profile/page.tsx` | Avatar upload uses `avatar` form field. |
 | `GET /api/users/{id}/followers` | Done | `profileAPI.getFollowers`, `app/(main)/feed/page.tsx` | Used for private post audience selection. |
-| `GET /api/users/{id}/following` | Pending | None | Helper exists; no real UI flow depends on it yet. |
+| `GET /api/users/{id}/following` | Partial | `profileAPI.getFollowing`, profile stats modal | Helper is wired in the profile stats modal; no standalone following page/list flow yet. |
+| `GET /api/users/search` | Done | `profileAPI.searchUsers`, layout discovery panel and group manage tab | Used for people discovery and invite picking. |
 
 ### Follow Requests
 
 | Backend route | Frontend status | Frontend location | Notes |
 | --- | --- | --- | --- |
 | `POST /api/follow/requests` | Pending | None | Route method still needs confirmation against intended behavior. |
-| `POST /api/follow/{id}` | Pending | None | Needed for follow/request button on user/profile surfaces. |
-| `DELETE /api/follow/{id}` | Pending | None | Needed for unfollow. |
+| `POST /api/follow/{id}` | Done | `followAPI.follow`, `app/(main)/profile/[id]/page.tsx` | Profile CTA respects backend public/private follow behavior. |
+| `DELETE /api/follow/{id}` | Done | `followAPI.unfollow`, `app/(main)/profile/[id]/page.tsx` | Profile unfollow CTA is wired. |
 | `POST /api/follow/{id}/accept` | Pending | None | Needed for accepting follow requests. |
 | `POST /api/follow/{id}/decline` | Pending | None | Needed for declining follow requests. |
 
@@ -72,7 +73,7 @@ Status meanings:
 | `DELETE /api/posts/{id}` | Pending | None | No delete post helper/UI. |
 | `POST /api/posts/{id}/image` | Done | `feedAPI.uploadPostImage`, `app/(main)/feed/page.tsx` | Uses `image` form field. |
 | `GET /api/feed` | Done | `feedAPI.getFeed`, `app/(main)/feed/page.tsx` | Main feed loads with pagination params. |
-| `GET /api/users/{id}/posts` | Pending | None | Not wired into profile/user pages. |
+| `GET /api/users/{id}/posts` | Done | `feedAPI.getUserPosts`, profile stats modal | User posts are wired into the profile posts modal and use feed-style cards. |
 | `GET /api/groups/{id}/posts` | Done | `feedAPI.getGroupPosts`, `app/(main)/groups/[id]/page.tsx` | Group posts load in the main feed area of the group page. |
 
 ### Comments
@@ -91,9 +92,9 @@ Status meanings:
 | `POST /api/groups` | Done | `groupAPI.createGroup`, `app/(main)/groups/page.tsx` | Create group is wired and redirects to group detail. |
 | `GET /api/groups` | Done | `groupAPI.getGroups`, `app/(main)/groups/page.tsx` | Group list loads from backend. Handles `null` response safely. |
 | `GET /api/groups/{id}` | Done | `groupAPI.getGroup`, `app/(main)/groups/[id]/page.tsx` | Uses enriched detail response including creator and membership status. |
-| `GET /api/groups/{id}/members` | Partial | `groupAPI.getMembers`, `app/(main)/groups/[id]/page.tsx` | Wired in frontend, but currently fails due to backend scan bug on `is_public`. |
+| `GET /api/groups/{id}/members` | Done | `groupAPI.getMembers`, `app/(main)/groups/[id]/page.tsx` | Members tab is wired and backend scan bug is fixed. |
 | `POST /api/groups/{id}/join` | Done | `groupAPI.requestJoin`, `app/(main)/groups/[id]/page.tsx` | Join request button is wired. |
-| `POST /api/groups/{id}/invite` | Done | `groupAPI.inviteUser`, `app/(main)/groups/[id]/page.tsx` | Wired in Manage tab. Current UI uses direct user-id input. |
+| `POST /api/groups/{id}/invite` | Done | `groupAPI.inviteUser`, `app/(main)/groups/[id]/page.tsx` | Wired in Manage tab with search-based invite picker. |
 | `POST /api/groups/{id}/invite/accept` | Done | `groupAPI.acceptInvite`, `app/(main)/groups/[id]/page.tsx` | Accept invite is wired from group detail header. |
 | `POST /api/groups/{id}/invite/decline` | Done | `groupAPI.declineInvite`, `app/(main)/groups/[id]/page.tsx` | Decline invite is wired from group detail header. |
 | `GET /api/groups/{id}/requests` | Done | `groupAPI.getJoinRequests`, `app/(main)/groups/[id]/page.tsx` | Creator-only request list is wired in Manage tab. |
@@ -107,10 +108,10 @@ Status meanings:
 
 | Backend route | Frontend status | Frontend location | Notes |
 | --- | --- | --- | --- |
-| `POST /api/chat/messages` | Done | `chatAPI.sendMessage`, messages page and group detail page | Used for private messages and group chat send. |
-| `GET /api/chat/messages/{userId}` | Done | `chatAPI.getMessages`, `app/(main)/messages/page.tsx` | Private message history is wired. |
+| `POST /api/chat/messages` | Done | `chatAPI.sendMessage`, messages page and group detail page | Used for private messages and group chat send. Message send now dedupes optimistic UI against WebSocket echo. |
+| `GET /api/chat/messages/{userId}` | Done | `chatAPI.getMessages`, `app/(main)/messages/page.tsx` | Private message history is wired. Backend now clamps pagination so previous messages reload correctly. |
 | `GET /api/groups/{id}/messages` | Done | `chatAPI.getGroupMessages`, `app/(main)/groups/[id]/page.tsx` | Group chat history is wired in Chat tab. |
-| `GET /api/chat/conversations` | Done | `chatAPI.getConversations`, `app/(main)/messages/page.tsx` | Route is now registered in backend. |
+| `GET /api/chat/conversations` | Done | `chatAPI.getConversations`, `app/(main)/messages/page.tsx` | Route is registered and drives the private conversation sidebar/previews. |
 | `POST /api/chat/conversations/{userId}/read` | Done | `chatAPI.markConversationRead`, `app/(main)/messages/page.tsx` | Route is now registered in backend. |
 
 ### WebSocket
@@ -133,16 +134,14 @@ Status meanings:
 
 ## Known Issues
 
-### Group Members Fetch Error
+### Messages Read State Migration
 
-The Members tab is wired, but currently fails because of a backend scan bug:
-
-`time=2026-07-06T21:14:20.420+03:00 level=ERROR msg="unhandled error reached handler" error="scan group member: sql: Scan error on column index 8, name \"is_public\": converting driver.Value type bool (\"true\") to a int: invalid syntax"`
+Private-message conversations now expect a `read_at` column on `messages`.
 
 Impact:
 
-- `GET /api/groups/{id}/members` is currently not usable in practice.
-- Frontend wiring is already present; backend needs the scan fix next.
+- Existing local databases need the new migration applied by restarting the backend so unread/read-aware conversation queries work.
+- Without the migration, conversation list queries can fail with `no such column: read_at`.
 
 ## UI and Code Pattern Notes
 
@@ -156,36 +155,30 @@ Impact:
 
 ## Recommended Next Step
 
-### Add Simple User Search
+### Finish Follow Request and Notification Flows
 
-Next backend/frontend work should be a very simple direct user search flow.
+Next backend/frontend work should focus on the remaining follow-request and notification gaps.
 
 Why next:
 
-- It is needed for the group invite picker.
-- It is also needed for the `Who to follow` sections on feed and profile pages.
+- Profile follow/unfollow is wired, but accepting/declining follow requests is still not surfaced cleanly.
+- Notification UI still assumes HTTP routes that are not registered in `routes.go`.
+- Logout is still a placeholder link and is one of the remaining auth integration gaps.
 
-Recommended initial scope:
+Recommended scope:
 
-- simple authenticated user search endpoint
-- basic frontend search helper
-- simple picker UI, not an elaborate directory
+- add/wire follow request accept and decline flows
+- either implement notification HTTP routes or remove/disable those frontend assumptions
+- add real logout action wiring
 
-Important invite-picker behavior:
+## Recommended Next Steps After That
 
-- filter out users who are already accepted group members
-- ideally also filter out users already invited or already requesting, depending on available backend data
-
-The current direct `user id` input in the Manage tab is only a temporary functional bridge.
-
-## Recommended Next Steps After Search
-
-1. Fix the backend members-fetch scan bug so `GET /api/groups/{id}/members` works.
-2. Add simple user search for invite picker and `Who to follow`.
-3. Replace direct invite-by-id input with a small search/picker UI.
-4. Wire frontend follow flows after search exists, so follow CTAs can use the same user-discovery path.
-5. Add logout action wiring.
-6. Revisit notification HTTP routes or remove/disable the current notification HTTP assumptions.
+1. Finish follow request accept/decline UX and notification-driven actions.
+2. Add logout action wiring.
+3. Revisit notification HTTP routes or remove/disable the current notification HTTP assumptions.
+4. Add edit/delete post flows.
+5. Add delete comment flow.
+6. Decide whether people discovery should gain direct follow CTAs again after shared-state syncing is in place.
 
 ## Verification
 

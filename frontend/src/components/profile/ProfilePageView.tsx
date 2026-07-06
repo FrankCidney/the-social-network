@@ -3,6 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import {
+  BookUser,
   Calendar,
   Camera,
   CheckCircle2,
@@ -11,7 +12,6 @@ import {
   Mail,
   MoreHorizontal,
   Pencil,
-  Sparkles,
   UserMinus,
   UserPlus,
   Users,
@@ -493,20 +493,28 @@ export function ProfilePageView({ userId }: { userId?: string }) {
               Edit profile
             </Button>
           ) : (
-            <Button
-              variant={isFollowing ? 'secondary' : 'primary'}
-              size="lg"
-              onClick={handleFollowToggle}
-              disabled={followLoading || profile.follow_request_status === 'pending'}
-              className="flex items-center gap-2"
-            >
-              {isFollowing ? <UserMinus className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-              {profile.follow_request_status === 'pending'
-                ? 'Requested'
-                : isFollowing
-                  ? 'Unfollow'
-                  : 'Follow'}
-            </Button>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant={isFollowing ? 'secondary' : 'primary'}
+                size="lg"
+                onClick={handleFollowToggle}
+                disabled={followLoading || profile.follow_request_status === 'pending'}
+                className="flex items-center gap-2"
+              >
+                {isFollowing ? <UserMinus className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                {profile.follow_request_status === 'pending'
+                  ? 'Requested'
+                  : isFollowing
+                    ? 'Unfollow'
+                    : 'Follow'}
+              </Button>
+              <Link
+                href={`/messages?user=${encodeURIComponent(profile.user.id)}`}
+                className="inline-flex items-center justify-center rounded-bento border border-gray-200 bg-white px-6 py-3 text-lg font-medium text-text-main transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                Message
+              </Link>
+            </div>
           )}
         </div>
 
@@ -546,9 +554,8 @@ export function ProfilePageView({ userId }: { userId?: string }) {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold text-gray-900">About</h2>
-                  <p className="text-sm text-gray-500 mt-1">A quick summary of this profile.</p>
                 </div>
-                <Sparkles className="w-5 h-5 text-indigo-500" />
+                <BookUser className="w-5 h-5 text-indigo-500" />
               </div>
               <p className="mt-6 text-gray-600 leading-7">
                 {profile.about_me?.trim() || 'No about section has been added yet.'}
@@ -571,7 +578,6 @@ export function ProfilePageView({ userId }: { userId?: string }) {
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-xl font-semibold text-gray-900">Profile summary</h2>
-                  <p className="text-sm text-gray-500 mt-1">Activity at a glance.</p>
                 </div>
                 <Users className="w-5 h-5 text-indigo-500" />
               </div>

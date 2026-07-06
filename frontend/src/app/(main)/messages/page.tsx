@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { Send, Search, MessageSquare } from "lucide-react";
@@ -29,16 +30,22 @@ function formatTime(iso?: string) {
 // The conversations/messages endpoints may return either a bare array or a
 // wrapped object depending on backend version — normalize both shapes.
 function unwrapConversations(data: ConversationsResult): ChatConversation[] {
+  if (!data) return [];
   return Array.isArray(data) ? data : data.conversations;
 }
 function unwrapMessages(data: MessagesResult): ChatMessage[] {
+  if (!data) return [];
   return Array.isArray(data) ? data : data.messages;
+}
+
+function isOptimisticMessage(message: ChatMessage) {
+  return message.id.startsWith("temp-");
 }
 type ConversationsResult = Awaited<ReturnType<typeof chatAPI.getConversations>>;
 type MessagesResult = Awaited<ReturnType<typeof chatAPI.getMessages>>;
 
 export default function MessagesPage() {
-  const { socket, isConnected } = useWebSocket();
+  const { socket } = useWebSocket();
   const searchParams = useSearchParams();
   const requestedUserId = searchParams.get("user");
 
@@ -48,6 +55,8 @@ export default function MessagesPage() {
   const [conversationsLoading, setConversationsLoading] = useState(true);
   const [conversationsError, setConversationsError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [requestedUser, setRequestedUser] = useState<PublicUser | null>(null);
+  const [requestedUserLoading, setRequestedUserLoading] = useState(false);
 
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
@@ -95,14 +104,55 @@ export default function MessagesPage() {
   }, [loadConversations]);
 
   useEffect(() => {
-    if (!requestedUserId || conversationsLoading) {
+    if (!requestedUserId || !currentUser || requestedUserId === currentUser.id) {
+      setRequestedUser(null);
       return;
     }
 
-    if (conversations.some((conversation) => conversation.user.id === requestedUserId)) {
-      setSelectedUserId(requestedUserId);
+    let cancelled = false;
+
+    const loadRequestedUser = async () => {
+      setRequestedUserLoading(true);
+      try {
+        const profile = await profileAPI.getProfile(requestedUserId);
+        if (!cancelled) {
+          setRequestedUser(profile.user);
+          setSelectedUserId(requestedUserId);
+        }
+      } catch (err) {
+        console.error("Failed to load requested user", err);
+        if (!cancelled) {
+          setRequestedUser(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setRequestedUserLoading(false);
+        }
+      }
+    };
+
+    void loadRequestedUser();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser, requestedUserId]);
+
+  const requestedConversation = useMemo<ChatConversation | null>(() => {
+    if (!requestedUserId || !requestedUser || conversations.some((conversation) => conversation.user.id === requestedUserId)) {
+      return null;
     }
-  }, [conversations, conversationsLoading, requestedUserId]);
+
+    return {
+      user: requestedUser,
+      unread_count: 0,
+    };
+  }, [conversations, requestedUser, requestedUserId]);
+
+  const allConversations = useMemo(
+    () => (requestedConversation ? [requestedConversation, ...conversations] : conversations),
+    [conversations, requestedConversation]
+  );
 
   const loadMessages = useCallback(async (userId: string) => {
     try {
@@ -154,9 +204,25 @@ export default function MessagesPage() {
         incoming.sender_id === openUserId || incoming.receiver_id === openUserId;
 
       if (isForOpenConversation) {
-        setMessages((prev) =>
-          prev.some((m) => m.id === incoming.id) ? prev : [...prev, incoming]
-        );
+        setMessages((prev) => {
+          if (prev.some((message) => message.id === incoming.id)) {
+            return prev;
+          }
+
+          const optimisticIndex = prev.findIndex(
+            (message) =>
+              isOptimisticMessage(message) &&
+              message.sender_id === incoming.sender_id &&
+              message.receiver_id === incoming.receiver_id &&
+              message.content === incoming.content
+          );
+
+          if (optimisticIndex === -1) {
+            return [...prev, incoming];
+          }
+
+          return prev.map((message, index) => (index === optimisticIndex ? incoming : message));
+        });
         chatAPI.markConversationRead(incoming.sender_id).catch(() => {});
       }
 
@@ -189,13 +255,13 @@ export default function MessagesPage() {
 
   const filteredConversations = useMemo(
     () =>
-      conversations.filter((c) =>
+      allConversations.filter((c) =>
         displayName(c.user).toLowerCase().includes(searchQuery.toLowerCase())
       ),
-    [conversations, searchQuery]
+    [allConversations, searchQuery]
   );
 
-  const activeConversation = conversations.find((c) => c.user.id === selectedUserId) ?? null;
+  const activeConversation = allConversations.find((c) => c.user.id === selectedUserId) ?? null;
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -215,16 +281,26 @@ export default function MessagesPage() {
     try {
       setSending(true);
       const saved = await chatAPI.sendMessage({ receiver_id: selectedUserId, content });
-      setMessages((prev) => prev.map((m) => (m.id === optimistic.id ? saved : m)));
+      setMessages((prev) => {
+        const replaced = prev.map((message) => (message.id === optimistic.id ? saved : message));
+        return replaced.filter(
+          (message, index, current) => current.findIndex((candidate) => candidate.id === message.id) === index
+        );
+      });
       setConversations((prev) =>
-        prev.map((c) =>
-          c.user.id === selectedUserId ? { ...c, last_message: saved } : c
-        )
+        prev.some((c) => c.user.id === selectedUserId)
+          ? prev.map((c) =>
+              c.user.id === selectedUserId ? { ...c, last_message: saved } : c
+            )
+          : activeConversation
+            ? [{ ...activeConversation, last_message: saved, unread_count: 0 }, ...prev]
+            : prev
       );
+      setMessagesError(null);
     } catch (err) {
       console.error("Failed to send message", err);
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
-      setMessagesError("Message failed to send.");
+      setMessagesError(err instanceof Error ? err.message : "Message failed to send.");
       setNewMessage(content);
     } finally {
       setSending(false);
@@ -321,7 +397,9 @@ export default function MessagesPage() {
           {!conversationsLoading && !conversationsError && filteredConversations.length === 0 && (
             <div className="p-6 text-center">
               <MessageSquare className="w-8 h-8 text-gray-300 mx-auto mb-3" />
-              <p className="text-sm text-gray-500">No conversations found</p>
+              <p className="text-sm text-gray-500">
+                {requestedUserLoading ? "Opening conversation..." : "No conversations found"}
+              </p>
             </div>
           )}
         </div>
@@ -334,24 +412,22 @@ export default function MessagesPage() {
             {/* Chat Header */}
             <div className="h-16 border-b border-gray-100 flex items-center px-6 justify-between">
               <div className="flex items-center gap-3">
-                {resolveAssetUrl(activeConversation.user.avatar_path) ? (
-                  <img
-                    src={resolveAssetUrl(activeConversation.user.avatar_path)}
-                    alt={displayName(activeConversation.user)}
-                    className="w-10 h-10 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-semibold text-sm">
-                    {initials(activeConversation.user)}
+                <Link href={`/profile/${activeConversation.user.id}`} className="contents">
+                  {resolveAssetUrl(activeConversation.user.avatar_path) ? (
+                    <img
+                      src={resolveAssetUrl(activeConversation.user.avatar_path)}
+                      alt={displayName(activeConversation.user)}
+                      className="w-10 h-10 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-semibold text-sm">
+                      {initials(activeConversation.user)}
+                    </div>
+                  )}
+                  <div>
+                    <h2 className="font-bold text-gray-900 hover:text-indigo-600">{displayName(activeConversation.user)}</h2>
                   </div>
-                )}
-                <div>
-                  <h2 className="font-bold text-gray-900">{displayName(activeConversation.user)}</h2>
-                  <span className="text-xs text-green-500 flex items-center gap-1">
-                    <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
-                    {isConnected ? "Connected" : "Connecting..."}
-                  </span>
-                </div>
+                </Link>
               </div>
             </div>
 
