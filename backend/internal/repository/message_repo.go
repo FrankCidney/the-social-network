@@ -125,7 +125,6 @@ func (r *sqliteMessageRepo) GetConversations(userID string) ([]*models.Conversat
 	return conversations, nil
 }
 
-// ADD THIS
 func (r *sqliteMessageRepo) buildConversation(userID, partnerID string) (*models.Conversation, error) {
 	const userQuery = `
 		SELECT id, first_name, last_name, nickname, avatar_path, is_public
@@ -174,7 +173,6 @@ func (r *sqliteMessageRepo) buildConversation(userID, partnerID string) (*models
 	return &models.Conversation{User: user, LastMessage: lastMsg, UnreadCount: unreadCount}, nil
 }
 
-// ADD THIS
 func (r *sqliteMessageRepo) MarkConversationRead(userID, otherUserID string) error {
 	const query = `
 		UPDATE messages
