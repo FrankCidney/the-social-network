@@ -2,6 +2,7 @@ package routes
 
 import (
 	"net/http"
+
 	"social-network/internal/auth"
 	"social-network/internal/handlers"
 	"social-network/internal/middleware"
@@ -27,9 +28,9 @@ func NewRouter(
 	registerCommentRoutes(mux, commentHandler, authService)
 	registerGroupRoutes(mux, groupHandler, authService)
 	registerChatRoutes(mux, chatHandler, authService)
-	
+
 	mux.Handle("GET /api/ws", middleware.RequireAuth(authService, http.HandlerFunc(wsHandler.ServeWS)))
-	
+
 	return middleware.CORS(mux)
 }
 
@@ -47,7 +48,7 @@ func registerProfileRoutes(mux *http.ServeMux, h *handlers.UserHandler, authServ
 	mux.Handle("GET /api/profile", middleware.RequireAuth(authService, http.HandlerFunc(h.GetProfile))) // own profile
 	mux.Handle("PUT /api/profile", middleware.RequireAuth(authService, http.HandlerFunc(h.UpdateProfile)))
 	mux.Handle("POST /api/profile/avatar", middleware.RequireAuth(authService, http.HandlerFunc(h.UploadAvatar)))
- 
+
 	// Followers/following lists
 	mux.Handle("GET /api/users/{id}/followers", middleware.RequireAuth(authService, http.HandlerFunc(h.GetFollowers)))
 	mux.Handle("GET /api/users/{id}/following", middleware.RequireAuth(authService, http.HandlerFunc(h.GetFollowing)))
@@ -64,10 +65,10 @@ func registerFollowRoutes(mux *http.ServeMux, h *handlers.FollowHandler, authSer
 func registerPostRoutes(mux *http.ServeMux, h *handlers.PostHandler, authService auth.Service) {
 	mux.Handle("POST /api/posts", middleware.RequireAuth(authService, http.HandlerFunc(h.CreatePost)))
 	mux.Handle("GET /api/posts/{id}", middleware.RequireAuth(authService, http.HandlerFunc(h.GetPost)))
-	mux.Handle("PUT /api/posts/{id}",       middleware.RequireAuth(authService, http.HandlerFunc(h.UpdatePost)))
-	mux.Handle("DELETE /api/posts/{id}",       middleware.RequireAuth(authService, http.HandlerFunc(h.DeletePost)))
+	mux.Handle("PUT /api/posts/{id}", middleware.RequireAuth(authService, http.HandlerFunc(h.UpdatePost)))
+	mux.Handle("DELETE /api/posts/{id}", middleware.RequireAuth(authService, http.HandlerFunc(h.DeletePost)))
 	mux.Handle("POST /api/posts/{id}/image", middleware.RequireAuth(authService, http.HandlerFunc(h.UploadPostImage)))
-	mux.Handle("GET /api/feed",             middleware.RequireAuth(authService, http.HandlerFunc(h.GetFeed)))
+	mux.Handle("GET /api/feed", middleware.RequireAuth(authService, http.HandlerFunc(h.GetFeed)))
 	mux.Handle("GET /api/users/{id}/posts", middleware.RequireAuth(authService, http.HandlerFunc(h.GetPostsByAuthor)))
 	mux.Handle("GET /api/groups/{id}/posts", middleware.RequireAuth(authService, http.HandlerFunc(h.GetGroupPosts)))
 }
@@ -75,17 +76,16 @@ func registerPostRoutes(mux *http.ServeMux, h *handlers.PostHandler, authService
 func registerCommentRoutes(mux *http.ServeMux, h *handlers.CommentHandler, authService auth.Service) {
 	mux.Handle("POST   /api/posts/{id}/comments", middleware.RequireAuth(authService, http.HandlerFunc(h.AddComment)))
 	mux.Handle("GET    /api/posts/{id}/comments", middleware.RequireAuth(authService, http.HandlerFunc(h.GetComments)))
-	mux.Handle("DELETE /api/comments/{id}",       middleware.RequireAuth(authService, http.HandlerFunc(h.DeleteComment)))
+	mux.Handle("DELETE /api/comments/{id}", middleware.RequireAuth(authService, http.HandlerFunc(h.DeleteComment)))
 	mux.Handle("POST   /api/comments/{id}/image", middleware.RequireAuth(authService, http.HandlerFunc(h.UploadCommentImage)))
 }
-
 
 func registerGroupRoutes(mux *http.ServeMux, h *handlers.GroupHandler, authService auth.Service) {
 	mux.Handle("POST /api/groups", middleware.RequireAuth(authService, http.HandlerFunc(h.CreateGroup)))
 	mux.Handle("GET /api/groups", middleware.RequireAuth(authService, http.HandlerFunc(h.GetGroups)))
 	mux.Handle("GET /api/groups/{id}", middleware.RequireAuth(authService, http.HandlerFunc(h.GetGroup)))
 	mux.Handle("POST /api/groups/{id}/join", middleware.RequireAuth(authService, http.HandlerFunc(h.RequestJoin)))
-	
+
 	mux.Handle("POST /api/groups/{id}/events", middleware.RequireAuth(authService, http.HandlerFunc(h.CreateEvent)))
 	mux.Handle("GET /api/groups/{id}/events", middleware.RequireAuth(authService, http.HandlerFunc(h.GetEvents)))
 }
@@ -94,4 +94,6 @@ func registerChatRoutes(mux *http.ServeMux, h *handlers.ChatHandler, authService
 	mux.Handle("POST /api/chat/messages", middleware.RequireAuth(authService, http.HandlerFunc(h.SendMessage)))
 	mux.Handle("GET /api/chat/messages/{userId}", middleware.RequireAuth(authService, http.HandlerFunc(h.GetPrivateMessages)))
 	mux.Handle("GET /api/groups/{id}/messages", middleware.RequireAuth(authService, http.HandlerFunc(h.GetGroupMessages)))
+	mux.Handle("GET /api/chat/conversations", middleware.RequireAuth(authService, http.HandlerFunc(h.GetConversations)))
+	mux.Handle("POST /api/chat/conversations/{userId}/read", middleware.RequireAuth(authService, http.HandlerFunc(h.MarkConversationRead)))
 }
