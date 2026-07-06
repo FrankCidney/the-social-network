@@ -12,7 +12,7 @@ A robust, full-stack social networking application built with Go and React. This
 - **Security:** Bcrypt for password hashing, UUID for unique identifiers
 
 ### Frontend
-- **Framework:** React with Vite
+- **Framework:** Next.js with React
 - **Language:** TypeScript
 - **Styling:** Tailwind CSS
 - **Routing:** React Router
@@ -54,7 +54,7 @@ A robust, full-stack social networking application built with Go and React. This
    ```
 
 3. Access the application:
-   - Frontend: `http://localhost:5173`
+   - Frontend: `http://localhost:3000`
    - Backend API: `http://localhost:8080`
 
 ## 📂 Project Structure

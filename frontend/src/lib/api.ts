@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? '';
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL ?? '').replace(/\/$/, '');
 
 type RequestOptions = Omit<RequestInit, 'body'> & {
   body?: BodyInit | Record<string, unknown> | unknown[];
@@ -7,6 +7,13 @@ type RequestOptions = Omit<RequestInit, 'body'> & {
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
   const isFormData = options.body instanceof FormData;
+  let body: BodyInit | undefined;
+
+  if (isFormData) {
+    body = options.body as FormData;
+  } else if (options.body !== undefined) {
+    body = JSON.stringify(options.body);
+  }
 
   if (options.body !== undefined && !isFormData && !headers.has('content-type')) {
     headers.set('content-type', 'application/json');
@@ -16,12 +23,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     ...options,
     headers,
     credentials: 'include',
-    body:
-      options.body === undefined
-        ? undefined
-        : isFormData
-          ? options.body
-          : JSON.stringify(options.body),
+    body,
   });
 
   if (!response.ok) {
@@ -111,6 +113,19 @@ export type ProfileResponse = {
 	post_count: number;
 };
 
+export type UpdateProfilePayload = {
+	first_name?: string;
+	last_name?: string;
+	dob?: string;
+	nickname?: string;
+	about_me?: string;
+	is_public?: boolean;
+};
+
+export type UploadAvatarResponse = {
+	avatar_path: string;
+};
+
 export type FollowListResponse = {
 	users: PublicUser[];
 	total: number;
@@ -186,6 +201,25 @@ export const groupAPI = {
 export const profileAPI = {
 	getMyProfile() {
 		return request<ProfileResponse>('/api/profile');
+	},
+
+	async updateProfile(payload: UpdateProfilePayload) {
+		await request<void>('/api/profile', {
+			method: 'PUT',
+			body: payload,
+		});
+
+		return request<ProfileResponse>('/api/profile');
+	},
+
+	uploadAvatar(file: File) {
+		const formData = new FormData();
+		formData.append('avatar', file);
+
+		return request<UploadAvatarResponse>('/api/profile/avatar', {
+			method: 'POST',
+			body: formData,
+		});
 	},
 
 	getFollowers(userId: string, limit?: number, offset?: number) {

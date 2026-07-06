@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { profileAPI } from "@/lib/api";
 
 interface WebSocketContextType {
   socket: WebSocket | null;
@@ -14,32 +15,57 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    // Only connect if we have a session token (we rely on the browser's cookie management)
-    // The server will check the cookie and upgrade the connection.
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    let ws: WebSocket | null = null;
+    let cancelled = false;
+
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "");
     const wsUrl = apiUrl
       ? `${apiUrl.replace(/^http/, "ws")}/api/ws`
       : `ws://${window.location.host}/api/ws`;
-    const ws = new WebSocket(wsUrl);
 
-    ws.onopen = () => {
-      console.log("WebSocket connected");
-      setIsConnected(true);
-    };
+    async function connect() {
+      try {
+        await profileAPI.getMyProfile();
+      } catch {
+        if (!cancelled) {
+          setSocket(null);
+          setIsConnected(false);
+        }
+        return;
+      }
 
-    ws.onclose = () => {
-      console.log("WebSocket disconnected");
-      setIsConnected(false);
-    };
+      if (cancelled) return;
 
-    ws.onerror = (error) => {
-      console.error("WebSocket error:", error);
-    };
+      ws = new WebSocket(wsUrl);
 
-    setSocket(ws);
+      ws.onopen = () => {
+        setIsConnected(true);
+      };
+
+      ws.onclose = (event) => {
+        setIsConnected(false);
+        setSocket(null);
+
+        if (!cancelled && event.code !== 1000) {
+          console.warn("WebSocket closed", {
+            code: event.code,
+            reason: event.reason || "No reason provided",
+          });
+        }
+      };
+
+      ws.onerror = () => {
+        setIsConnected(false);
+      };
+
+      setSocket(ws);
+    }
+
+    void connect();
 
     return () => {
-      ws.close();
+      cancelled = true;
+      ws?.close();
     };
   }, []);
 
