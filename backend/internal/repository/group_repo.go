@@ -113,14 +113,12 @@ func (r *sqliteGroupRepo) getGroupMembersByStatus(groupID, status string) ([]*mo
 	var users []*models.User
 	for rows.Next() {
 		u := &models.User{}
-		var isPublic int
 		if err := rows.Scan(
 			&u.ID, &u.Email, &u.FirstName, &u.LastName, &u.DOB,
-			&u.Nickname, &u.AboutMe, &u.AvatarPath, &isPublic, &u.CreatedAt,
+			&u.Nickname, &u.AboutMe, &u.AvatarPath, &u.IsPublic, &u.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan group member: %w", err)
 		}
-		u.IsPublic = isPublic == 1
 		users = append(users, u)
 	}
 	return users, nil

@@ -138,6 +138,16 @@ export type FollowListResponse = {
 	offset: number;
 };
 
+export type UserSearchResult = PublicUser & {
+	is_following: boolean;
+	follow_request_status?: 'pending' | 'accepted' | 'declined';
+};
+
+export type UserSearchParams = {
+	limit?: number;
+	exclude_group_id?: string;
+};
+
 export type CommentResponse = {
 	id: string;
 	author: PublicUser;
@@ -372,6 +382,20 @@ export const profileAPI = {
 		if (offset !== undefined) params.set('offset', String(offset));
 		const query = params.toString();
 		return request<FollowListResponse>(`/api/users/${userId}/following${query ? `?${query}` : ''}`);
+	},
+
+	searchUsers(searchQuery: string, params: UserSearchParams = {}) {
+		const query = searchQuery.trim();
+		if (!query) {
+			return Promise.resolve([] as UserSearchResult[]);
+		}
+
+		const urlParams = new URLSearchParams();
+		urlParams.set('q', query);
+		if (params.limit !== undefined) urlParams.set('limit', String(params.limit));
+		if (params.exclude_group_id) urlParams.set('exclude_group_id', params.exclude_group_id);
+
+		return request<UserSearchResult[]>(`/api/users/search?${urlParams.toString()}`);
 	},
 };
 

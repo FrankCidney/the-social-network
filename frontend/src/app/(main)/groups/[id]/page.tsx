@@ -80,7 +80,10 @@ export default function GroupDetailPage() {
 	const [requests, setRequests] = React.useState<PublicUser[]>([]);
 	const [requestsLoading, setRequestsLoading] = React.useState(false);
 	const [requestsError, setRequestsError] = React.useState<string | null>(null);
-	const [inviteeId, setInviteeId] = React.useState('');
+	const [inviteQuery, setInviteQuery] = React.useState('');
+	const deferredInviteQuery = React.useDeferredValue(inviteQuery);
+	const [inviteResults, setInviteResults] = React.useState<PublicUser[]>([]);
+	const [inviteSearchLoading, setInviteSearchLoading] = React.useState(false);
 	const [inviteSubmitting, setInviteSubmitting] = React.useState(false);
 	const [inviteError, setInviteError] = React.useState<string | null>(null);
 	const [eventResponses, setEventResponses] = React.useState<Record<string, 'going' | 'not_going'>>({});
@@ -193,6 +196,53 @@ export default function GroupDetailPage() {
 
 		void loadRequests();
 	}, [activeTab, canModerateRequests, groupId]);
+
+	React.useEffect(() => {
+		if (!groupId || activeTab !== 'manage' || !canInvite) {
+			setInviteResults([]);
+			setInviteSearchLoading(false);
+			return;
+		}
+
+		const query = deferredInviteQuery.trim();
+		if (query.length < 2) {
+			setInviteResults([]);
+			setInviteSearchLoading(false);
+			setInviteError(null);
+			return;
+		}
+
+		let cancelled = false;
+
+		const loadInviteResults = async () => {
+			setInviteSearchLoading(true);
+			setInviteError(null);
+			try {
+				const response = await profileAPI.searchUsers(query, {
+					limit: 8,
+					exclude_group_id: groupId,
+				});
+				if (!cancelled) {
+					setInviteResults(Array.isArray(response) ? response : []);
+				}
+			} catch (err) {
+				if (!cancelled) {
+					setInviteResults([]);
+					setInviteError(err instanceof Error ? err.message : 'Failed to search users');
+				}
+			} finally {
+				if (!cancelled) {
+					setInviteSearchLoading(false);
+				}
+			}
+		};
+
+		void loadInviteResults();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [activeTab, canInvite, deferredInviteQuery, groupId]);
 
 	const handleJoinRequest = async () => {
 		if (!groupId) {
@@ -364,24 +414,17 @@ export default function GroupDetailPage() {
 		}
 	};
 
-	const handleInviteUser = async (event: React.FormEvent<HTMLFormElement>) => {
-		event.preventDefault();
-
+	const handleInviteUser = async (invitee: PublicUser) => {
 		if (!groupId) {
-			return;
-		}
-
-		const trimmedInviteeId = inviteeId.trim();
-		if (!trimmedInviteeId) {
-			setInviteError('Enter a user ID.');
 			return;
 		}
 
 		setInviteSubmitting(true);
 		setInviteError(null);
 		try {
-			await groupAPI.inviteUser(groupId, { invitee_id: trimmedInviteeId });
-			setInviteeId('');
+			await groupAPI.inviteUser(groupId, { invitee_id: invitee.id });
+			setInviteResults((current) => current.filter((user) => user.id !== invitee.id));
+			setInviteQuery('');
 			setMembershipNotice('Invite sent.');
 		} catch (err) {
 			setInviteError(err instanceof Error ? err.message : 'Failed to send invite');
@@ -693,19 +736,52 @@ export default function GroupDetailPage() {
 						{activeTab === 'manage' ? (
 							<div className="space-y-4">
 								{canInvite ? (
-									<form className="space-y-3 rounded-[22px] border border-gray-100 bg-gray-50/80 p-4" onSubmit={handleInviteUser}>
+									<div className="space-y-3 rounded-[22px] border border-gray-100 bg-gray-50/80 p-4">
 										<Input
-											label="Invite user ID"
-											value={inviteeId}
-											onChange={(event) => setInviteeId(event.target.value)}
-											placeholder="user-id"
+											label="Invite people"
+											value={inviteQuery}
+											onChange={(event) => setInviteQuery(event.target.value)}
+											placeholder="Search by name, nickname, or user ID"
 										/>
 										{inviteError ? <p className="text-sm text-rose-600">{inviteError}</p> : null}
-										<Button type="submit" disabled={inviteSubmitting}>
-											{inviteSubmitting ? <Loader className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
-											Invite
-										</Button>
-									</form>
+										{inviteQuery.trim().length < 2 ? (
+											<p className="text-sm text-gray-500">Type at least 2 characters to search.</p>
+										) : inviteSearchLoading ? (
+											<div className="flex items-center gap-2 text-sm text-gray-500">
+												<Loader className="h-4 w-4 animate-spin text-indigo-600" />
+												Searching people...
+											</div>
+										) : inviteResults.length > 0 ? (
+											<div className="space-y-2">
+												{inviteResults.map((user) => (
+													<div key={user.id} className="flex items-center justify-between gap-3 rounded-[18px] border border-white bg-white px-3 py-3">
+														<div className="flex min-w-0 items-center gap-3">
+															{renderAvatar(user)}
+															<div className="min-w-0">
+																<p className="truncate text-sm font-semibold text-gray-900">
+																	{user.first_name} {user.last_name}
+																</p>
+																<p className="truncate text-xs text-gray-500">
+																	{user.nickname || user.id}
+																</p>
+															</div>
+														</div>
+														<Button
+															type="button"
+															size="sm"
+															disabled={inviteSubmitting}
+															onClick={() => void handleInviteUser(user)}
+														>
+															{inviteSubmitting ? <Loader className="mr-2 h-4 w-4 animate-spin" /> : <UserPlus className="mr-2 h-4 w-4" />}
+															Invite
+														</Button>
+													</div>
+												))}
+											</div>
+										) : (
+											<p className="text-sm text-gray-500">No matching people available to invite.</p>
+										)}
+									</div>
 								) : null}
 
 								{canModerateRequests ? (

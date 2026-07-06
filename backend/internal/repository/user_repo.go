@@ -12,6 +12,7 @@ type UserRepository interface {
 	CreateUser(u *models.User) error
 	GetUserByID(id string) (*models.User, error)
 	GetUserByEmail(email string) (*models.User, error)
+	SearchUsers(query string, limit int, excludeUserID, excludeGroupID string) ([]*models.User, error)
 	UpdateUser(u *models.User) error
 	SetProfileVisibility(userID string, isPublic bool) error
 	UpdateAvatarPath(userID, path string) error
@@ -106,6 +107,61 @@ func (r *sqliteUserRepo) GetUserByEmail(email string) (*models.User, error) {
 	return u, nil
 }
 
+func (r *sqliteUserRepo) SearchUsers(query string, limit int, excludeUserID, excludeGroupID string) ([]*models.User, error) {
+	const searchQuery = `
+		SELECT u.id, u.email, u.password, u.first_name, u.last_name, u.dob,
+		       COALESCE(u.nickname, ''), COALESCE(u.about_me, ''), COALESCE(u.avatar_path, ''),
+		       u.is_public, u.created_at
+		FROM users u
+		WHERE u.id != ?
+		  AND (
+			? = ''
+			OR LOWER(u.first_name) LIKE LOWER(?)
+			OR LOWER(u.last_name) LIKE LOWER(?)
+			OR LOWER(COALESCE(u.nickname, '')) LIKE LOWER(?)
+			OR LOWER(u.id) LIKE LOWER(?)
+			OR LOWER(TRIM(u.first_name || ' ' || u.last_name)) LIKE LOWER(?)
+		  )
+		  AND (
+			? = ''
+			OR NOT EXISTS (
+				SELECT 1
+				FROM group_members gm
+				WHERE gm.group_id = ?
+				  AND gm.user_id = u.id
+				  AND gm.status IN ('accepted', 'invited', 'requested')
+			)
+		  )
+		ORDER BY
+			CASE
+				WHEN LOWER(COALESCE(u.nickname, '')) = LOWER(?) THEN 0
+				WHEN LOWER(TRIM(u.first_name || ' ' || u.last_name)) = LOWER(?) THEN 1
+				WHEN LOWER(u.id) = LOWER(?) THEN 2
+				ELSE 3
+			END,
+			u.first_name ASC,
+			u.last_name ASC,
+			u.id ASC
+		LIMIT ?`
+
+	pattern := "%" + query + "%"
+	rows, err := r.db.Query(
+		searchQuery,
+		excludeUserID,
+		query,
+		pattern, pattern, pattern, pattern, pattern,
+		excludeGroupID, excludeGroupID,
+		query, query, query,
+		limit,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("search users: %w", err)
+	}
+	defer rows.Close()
+
+	return scanUsers(rows)
+}
+
 func (r *sqliteUserRepo) SetProfileVisibility(userID string, isPublic bool) error {
 	const query = `UPDATE users SET is_public = ? WHERE id = ?`
 	res, err := r.db.Exec(query, isPublic, userID)
@@ -122,4 +178,22 @@ func (r *sqliteUserRepo) UpdateAvatarPath(userID, path string) error {
 		return fmt.Errorf("update avatar: %w", err)
 	}
 	return requireOneRow(res, "user")
+}
+
+func scanUsers(rows *sql.Rows) ([]*models.User, error) {
+	var users []*models.User
+	for rows.Next() {
+		u := &models.User{}
+		if err := rows.Scan(
+			&u.ID, &u.Email, &u.Password, &u.FirstName, &u.LastName, &u.DOB,
+			&u.Nickname, &u.AboutMe, &u.AvatarPath, &u.IsPublic, &u.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan user: %w", err)
+		}
+		users = append(users, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+	return users, nil
 }

@@ -22,6 +22,7 @@ type Service interface {
 	UploadAvatar(userID string, file multipart.File, header *multipart.FileHeader) (string, error)
 	GetFollowers(userID string, limit, offset int) (*models.FollowListResponse, error)
 	GetFollowing(userID string, limit, offset int) (*models.FollowListResponse, error)
+	SearchUsers(viewerID, query string, limit int, excludeGroupID string) ([]*models.UserSearchResult, error)
 }
 
 type PostCounter interface {
@@ -29,7 +30,9 @@ type PostCounter interface {
 }
 
 const (
-	avatarUploadDir = "uploads/avatars"
+	avatarUploadDir    = "uploads/avatars"
+	defaultSearchLimit = 8
+	maxSearchLimit     = 20
 )
 
 type service struct {
@@ -280,6 +283,55 @@ func (s *service) GetFollowing(userID string, limit, offset int) (*models.Follow
 		Limit:  limit,
 		Offset: offset,
 	}, nil
+}
+
+func (s *service) SearchUsers(viewerID, query string, limit int, excludeGroupID string) ([]*models.UserSearchResult, error) {
+	query = strings.TrimSpace(query)
+
+	switch {
+	case limit <= 0:
+		limit = defaultSearchLimit
+	case limit > maxSearchLimit:
+		limit = maxSearchLimit
+	}
+
+	users, err := s.users.SearchUsers(query, limit, viewerID, strings.TrimSpace(excludeGroupID))
+	if err != nil {
+		return nil, err
+	}
+
+	results := make([]*models.UserSearchResult, 0, len(users))
+	for _, user := range users {
+		result := &models.UserSearchResult{
+			ID:         user.ID,
+			FirstName:  user.FirstName,
+			LastName:   user.LastName,
+			Nickname:   user.Nickname,
+			AvatarPath: user.AvatarPath,
+			IsPublic:   user.IsPublic,
+		}
+
+		isFollowing, err := s.follows.IsFollowing(viewerID, user.ID)
+		if err != nil {
+			return nil, fmt.Errorf("check following: %w", err)
+		}
+		result.IsFollowing = isFollowing
+
+		if !isFollowing {
+			followRequest, err := s.follows.GetFollowRequest(viewerID, user.ID)
+			if err != nil {
+				if !errors.Is(err, apperror.ErrNotFound) {
+					return nil, fmt.Errorf("get follow request: %w", err)
+				}
+			} else {
+				result.FollowRequestStatus = followRequest.Status
+			}
+		}
+
+		results = append(results, result)
+	}
+
+	return results, nil
 }
 
 func toPublicUsers(users []*models.User) []*models.PublicUser {

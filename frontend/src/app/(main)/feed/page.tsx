@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import {
 	Check,
@@ -1118,15 +1119,17 @@ export default function FeedPage() {
 							>
 								<div className="p-4 flex items-center justify-between">
 									<div className="flex items-center gap-3">
-										{renderAvatar(post.author)}
-										<div>
-											<p className="text-sm font-bold">
-												{post.author.first_name} {post.author.last_name}
-											</p>
-											<p className="text-xs text-gray-500">
-												{formatDate(post.created_at)} • {formatPrivacyLabel(post.privacy)}
-											</p>
-										</div>
+										<Link href={`/profile/${post.author.id}`} className="contents">
+											{renderAvatar(post.author)}
+											<div>
+												<p className="text-sm font-bold hover:text-indigo-600">
+													{post.author.first_name} {post.author.last_name}
+												</p>
+												<p className="text-xs text-gray-500">
+													{formatDate(post.created_at)} • {formatPrivacyLabel(post.privacy)}
+												</p>
+											</div>
+										</Link>
 									</div>
 									<button className="text-gray-400 hover:text-gray-600">
 										<MoreHorizontal className="w-5 h-5" />

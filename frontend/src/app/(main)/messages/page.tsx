@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { Send, Search, MessageSquare } from "lucide-react";
 import { useWebSocket } from "@/contexts/WebSocketContext";
 import {
@@ -38,6 +39,8 @@ type MessagesResult = Awaited<ReturnType<typeof chatAPI.getMessages>>;
 
 export default function MessagesPage() {
   const { socket, isConnected } = useWebSocket();
+  const searchParams = useSearchParams();
+  const requestedUserId = searchParams.get("user");
 
   const [currentUser, setCurrentUser] = useState<PublicUser | null>(null);
 
@@ -90,6 +93,16 @@ export default function MessagesPage() {
   useEffect(() => {
     loadConversations();
   }, [loadConversations]);
+
+  useEffect(() => {
+    if (!requestedUserId || conversationsLoading) {
+      return;
+    }
+
+    if (conversations.some((conversation) => conversation.user.id === requestedUserId)) {
+      setSelectedUserId(requestedUserId);
+    }
+  }, [conversations, conversationsLoading, requestedUserId]);
 
   const loadMessages = useCallback(async (userId: string) => {
     try {

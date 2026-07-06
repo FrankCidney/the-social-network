@@ -44,6 +44,7 @@ func registerAuthRoutes(mux *http.ServeMux, h *handlers.AuthHandler, authService
 }
 
 func registerProfileRoutes(mux *http.ServeMux, h *handlers.UserHandler, authService auth.Service) {
+	mux.Handle("GET /api/users/search", middleware.RequireAuth(authService, http.HandlerFunc(h.SearchUsers)))
 	mux.Handle("GET /api/profile/{id}", middleware.RequireAuth(authService, http.HandlerFunc(h.GetProfile)))
 	mux.Handle("GET /api/profile", middleware.RequireAuth(authService, http.HandlerFunc(h.GetProfile))) // own profile
 	mux.Handle("PUT /api/profile", middleware.RequireAuth(authService, http.HandlerFunc(h.UpdateProfile)))

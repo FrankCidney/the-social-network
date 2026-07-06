@@ -38,6 +38,17 @@ type FollowListResponse struct {
 	Offset int           `json:"offset"`
 }
 
+type UserSearchResult struct {
+	ID                  string `json:"id"`
+	FirstName           string `json:"first_name"`
+	LastName            string `json:"last_name"`
+	Nickname            string `json:"nickname,omitempty"`
+	AvatarPath          string `json:"avatar_path,omitempty"`
+	IsPublic            bool   `json:"is_public"`
+	IsFollowing         bool   `json:"is_following"`
+	FollowRequestStatus string `json:"follow_request_status,omitempty"`
+}
+
 type FollowRequestResponse struct {
 	SenderID   string `json:"sender_id"`
 	ReceiverID string `json:"receiver_id"`

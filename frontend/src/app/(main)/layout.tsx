@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Home, Users, MessageSquare, Bell, User, LogOut, Search } from 'lucide-react';
+import { PeopleDiscoveryPanel } from '@/components/discovery/PeopleDiscoveryPanel';
 import { WebSocketProvider } from '@/contexts/WebSocketContext';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
 
@@ -63,23 +64,7 @@ export default function MainLayout({
           {/* Right Sidebar (Suggestions/Trends) */}
           {!isGroupsRoute && (
           <aside className="hidden lg:block lg:col-span-3 space-y-6">
-            <div className="bg-white rounded-xl border border-gray-100 p-4">
-              <h3 className="font-bold text-gray-900 mb-4">Who to follow</h3>
-              <div className="space-y-4">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gray-200" />
-                      <div className="text-sm">
-                        <p className="font-bold">User {i}</p>
-                        <p className="text-gray-500 text-xs">@user_{i}</p>
-                      </div>
-                    </div>
-                    <button className="text-xs font-bold text-indigo-600 hover:text-indigo-700">Follow</button>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <PeopleDiscoveryPanel />
           </aside>
           )}
         </div>
