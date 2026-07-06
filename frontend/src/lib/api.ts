@@ -251,9 +251,11 @@ export function resolveAssetUrl(path?: string) {
 	const normalizedPath = path.startsWith('/') ? path : `/${path}`;
 	return API_BASE_URL ? `${API_BASE_URL}${normalizedPath}` : normalizedPath;
 }
-// Chat / Messaging API 
+
+// --- Chat / Messaging API -----------------------------------------------
 // Conversations are keyed by the *other* user's id (1:1 chat), matching the
-// Yoh can be adjusted if the backend differs
+// shape your MessagesPage already assumed with `receiver_id`. Adjust the
+// endpoint paths below if your backend routes differ.
 
 export type ChatMessage = {
 	id: string;
@@ -314,6 +316,59 @@ export const chatAPI = {
 	// Mark all messages from a user as read.
 	markConversationRead(userId: string) {
 		return request<void>(`/api/chat/conversations/${userId}/read`, {
+			method: 'POST',
+		});
+	},
+};
+
+// --- Notifications API ---------------------------------------------------
+
+export type NotificationItem = {
+	id: string;
+	type: string;
+	actor_id: string;
+	actor?: PublicUser;
+	message?: string;
+	created_at: string;
+	is_read: boolean;
+};
+
+export type NotificationListResponse = {
+	notifications: NotificationItem[];
+	total: number;
+	limit: number;
+	offset: number;
+};
+
+export const notificationsAPI = {
+	// List notifications for the current user, most recent first.
+	getNotifications(limit?: number, offset?: number) {
+		const params = new URLSearchParams();
+		if (limit !== undefined) params.set('limit', String(limit));
+		if (offset !== undefined) params.set('offset', String(offset));
+		const query = params.toString();
+		return request<NotificationListResponse | NotificationItem[]>(
+			`/api/notifications${query ? `?${query}` : ''}`
+		);
+	},
+
+	// Mark a single notification as read.
+	markAsRead(notificationId: string) {
+		return request<void>(`/api/notifications/${notificationId}/read`, {
+			method: 'POST',
+		});
+	},
+
+	// Mark every notification as read.
+	markAllAsRead() {
+		return request<void>('/api/notifications/read-all', {
+			method: 'POST',
+		});
+	},
+
+	// Accept/decline a follow request notification.
+	respondToFollowRequest(actorId: string, accept: boolean) {
+		return request<void>(`/api/follow-requests/${actorId}/${accept ? 'accept' : 'decline'}`, {
 			method: 'POST',
 		});
 	},
