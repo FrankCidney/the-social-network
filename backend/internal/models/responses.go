@@ -26,6 +26,7 @@ type Profile struct {
 	FollowerCount       int         `json:"follower_count"`
 	FollowingCount      int         `json:"following_count"`
 	PostCount           int         `json:"post_count"`
+	CanViewFullProfile  bool        `json:"can_view_full_profile"`
 	IsOwnProfile        bool        `json:"is_own_profile"`
 	IsFollowing         bool        `json:"is_following"`
 	FollowRequestStatus string      `json:"follow_request_status,omitempty"`

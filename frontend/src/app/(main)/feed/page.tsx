@@ -152,6 +152,9 @@ export default function FeedPage() {
 		};
 	}, [selectedImage]);
 
+	const isAuthenticationError =
+		feedError?.toLowerCase().includes('authentication required') ?? false;
+
 	const loadFollowers = async (offset: number) => {
 		if (!currentUser) {
 			return;
@@ -1062,8 +1065,36 @@ export default function FeedPage() {
 			</div>
 
 			{feedError && (
-				<div className="bg-white rounded-xl border border-red-200 p-4 text-center">
-					<p className="text-sm text-red-600">{feedError}</p>
+				<div
+					className={`rounded-xl border p-6 text-center ${
+						isAuthenticationError
+							? 'bg-white border-gray-200'
+							: 'bg-white border-red-200'
+					}`}
+				>
+					<p
+						className={`text-sm ${
+							isAuthenticationError ? 'text-gray-700' : 'text-red-600'
+						}`}
+					>
+						{feedError}
+					</p>
+					{isAuthenticationError && (
+						<div className="mt-4 flex flex-col items-center justify-center gap-3 sm:flex-row">
+							<Link
+								href="/login"
+								className="inline-flex items-center justify-center rounded-bento bg-primary px-4 py-2 font-medium text-white transition-colors hover:bg-opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+							>
+								Go to login
+							</Link>
+							<Link
+								href="/register"
+								className="inline-flex items-center justify-center rounded-bento border border-gray-200 bg-white px-4 py-2 font-medium text-text-main transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+							>
+								Create account
+							</Link>
+						</div>
+					)}
 				</div>
 			)}
 

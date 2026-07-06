@@ -1155,6 +1155,33 @@ func TestGetPostsByAuthor(t *testing.T) {
 	}
 }
 
+func TestGetPostsByAuthorRejectsPrivateProfileForNonFollower(t *testing.T) {
+	db := setupTestDB(t)
+	seedUser(t, db, "viewer", "viewer@example.com")
+	seedUser(t, db, "author", "author@example.com")
+
+	if _, err := db.Exec(`UPDATE users SET is_public = 0 WHERE id = 'author'`); err != nil {
+		t.Fatalf("failed to make author private: %v", err)
+	}
+	if _, err := db.Exec(`
+		INSERT INTO posts (id, user_id, content, privacy, created_at)
+		VALUES ('post-private-profile', 'author', 'hidden', 'public', datetime('now'))
+	`); err != nil {
+		t.Fatalf("failed to seed post: %v", err)
+	}
+
+	postsRepo := repository.NewPostRepository(db)
+	usersRepo := repository.NewUserRepository(db)
+	followsRepo := repository.NewFollowRepository(db)
+
+	svc := NewService(postsRepo, usersRepo, followsRepo, &mockGroupMembership{})
+
+	_, err := svc.GetPostsByAuthor("viewer", "author", 10, 0)
+	if !errors.Is(err, apperror.ErrForbidden) {
+		t.Fatalf("expected forbidden, got %v", err)
+	}
+}
+
 func TestGetGroupPosts(t *testing.T) {
 	db := setupTestDB(t)
 	seedTestFeedData(t, db)

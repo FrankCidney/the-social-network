@@ -7,6 +7,8 @@ import { Send, Search, MessageSquare } from "lucide-react";
 import { useWebSocket } from "@/contexts/WebSocketContext";
 import {
   chatAPI,
+  isAuthenticationError,
+  isForbiddenError,
   profileAPI,
   resolveAssetUrl,
   ChatConversation,
@@ -57,6 +59,7 @@ export default function MessagesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [requestedUser, setRequestedUser] = useState<PublicUser | null>(null);
   const [requestedUserLoading, setRequestedUserLoading] = useState(false);
+  const [requestedUserError, setRequestedUserError] = useState<string | null>(null);
 
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
@@ -80,7 +83,7 @@ export default function MessagesPage() {
     profileAPI
       .getMyProfile()
       .then((profile) => setCurrentUser(profile.user))
-      .catch((err) => console.error("Failed to load current user", err));
+      .catch(() => {});
   }, []);
 
   const loadConversations = useCallback(async () => {
@@ -92,8 +95,9 @@ export default function MessagesPage() {
       setConversationsError(null);
       setSelectedUserId((prev) => prev ?? list[0]?.user.id ?? null);
     } catch (err) {
-      console.error("Failed to load conversations", err);
-      setConversationsError("Could not load your conversations.");
+      if (!isAuthenticationError(err)) {
+        setConversationsError(err instanceof Error ? err.message : "Could not load your conversations.");
+      }
     } finally {
       setConversationsLoading(false);
     }
@@ -106,6 +110,7 @@ export default function MessagesPage() {
   useEffect(() => {
     if (!requestedUserId || !currentUser || requestedUserId === currentUser.id) {
       setRequestedUser(null);
+      setRequestedUserError(null);
       return;
     }
 
@@ -113,6 +118,7 @@ export default function MessagesPage() {
 
     const loadRequestedUser = async () => {
       setRequestedUserLoading(true);
+      setRequestedUserError(null);
       try {
         const profile = await profileAPI.getProfile(requestedUserId);
         if (!cancelled) {
@@ -120,9 +126,11 @@ export default function MessagesPage() {
           setSelectedUserId(requestedUserId);
         }
       } catch (err) {
-        console.error("Failed to load requested user", err);
         if (!cancelled) {
           setRequestedUser(null);
+          setRequestedUserError(
+            err instanceof Error ? err.message : "Could not open this conversation."
+          );
         }
       } finally {
         if (!cancelled) {
@@ -165,8 +173,9 @@ export default function MessagesPage() {
         prev.map((c) => (c.user.id === userId ? { ...c, unread_count: 0 } : c))
       );
     } catch (err) {
-      console.error("Failed to load messages", err);
-      setMessagesError("Could not load this conversation.");
+      if (!isAuthenticationError(err)) {
+        setMessagesError(err instanceof Error ? err.message : "Could not load this conversation.");
+      }
     } finally {
       setMessagesLoading(false);
     }
@@ -298,7 +307,6 @@ export default function MessagesPage() {
       );
       setMessagesError(null);
     } catch (err) {
-      console.error("Failed to send message", err);
       setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
       setMessagesError(err instanceof Error ? err.message : "Message failed to send.");
       setNewMessage(content);
@@ -398,7 +406,9 @@ export default function MessagesPage() {
             <div className="p-6 text-center">
               <MessageSquare className="w-8 h-8 text-gray-300 mx-auto mb-3" />
               <p className="text-sm text-gray-500">
-                {requestedUserLoading ? "Opening conversation..." : "No conversations found"}
+                {requestedUserLoading
+                  ? "Opening conversation..."
+                  : requestedUserError || "No conversations found"}
               </p>
             </div>
           )}

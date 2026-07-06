@@ -2,13 +2,15 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { authAPI, LoginPayload } from '@/lib/api';
 
 export default function LoginPage() {
 	const router = useRouter();
+	const searchParams = useSearchParams();
+	const nextPath = searchParams.get('next') || '/feed';
 
 	const [formData, setFormData] = React.useState<LoginPayload>({
 		email: '',
@@ -34,7 +36,7 @@ export default function LoginPage() {
 		try {
 			await authAPI.login(formData);
 
-			router.push('/feed');
+			router.push(nextPath);
 		} catch (err) {
 			setError(
 				err instanceof Error
@@ -101,7 +103,10 @@ export default function LoginPage() {
 
 			<div className="text-center text-sm">
 				<span className="text-gray-500">Don't have an account? </span>
-				<Link href="/register" className="font-medium text-primary hover:underline">
+				<Link
+					href={nextPath === '/feed' ? '/register' : `/register?next=${encodeURIComponent(nextPath)}`}
+					className="font-medium text-primary hover:underline"
+				>
 					Create an account
 				</Link>
 			</div>

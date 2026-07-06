@@ -21,6 +21,8 @@ import { Button } from '@/components/ui/Button';
 import {
   feedAPI,
   followAPI,
+  isAuthenticationError,
+  isForbiddenError,
   PostResponse,
   profileAPI,
   ProfileResponse,
@@ -115,6 +117,7 @@ export function ProfilePageView({ userId }: { userId?: string }) {
   const [form, setForm] = React.useState<EditFormState | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
+  const [followError, setFollowError] = React.useState<string | null>(null);
 
   const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = React.useState<string | null>(null);
@@ -130,8 +133,15 @@ export function ProfilePageView({ userId }: { userId?: string }) {
       const data = userId ? await profileAPI.getProfile(userId) : await profileAPI.getMyProfile();
       setProfile(data);
     } catch (err) {
-      console.error('Failed to load profile', err);
-      setError(userId ? 'Unable to load this profile right now.' : 'Unable to load your profile right now.');
+      if (!isAuthenticationError(err)) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : userId
+              ? 'Unable to load this profile right now.'
+              : 'Unable to load your profile right now.'
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -141,6 +151,11 @@ export function ProfilePageView({ userId }: { userId?: string }) {
     void loadProfile();
   }, [loadProfile]);
 
+  const isOwnProfile = profile?.is_own_profile ?? !userId;
+  const isFollowing = Boolean(profile?.is_following);
+  const canViewFullProfile =
+    profile?.can_view_full_profile ?? (profile ? isOwnProfile || profile.user.is_public || isFollowing : false);
+
   React.useEffect(() => {
     return () => {
       if (avatarPreview) URL.revokeObjectURL(avatarPreview);
@@ -149,6 +164,7 @@ export function ProfilePageView({ userId }: { userId?: string }) {
 
   const startEditing = () => {
     if (!profile) return;
+    setFollowError(null);
     setForm({
       first_name: profile.user.first_name,
       last_name: profile.user.last_name,
@@ -182,6 +198,7 @@ export function ProfilePageView({ userId }: { userId?: string }) {
     if (!form || !profile) return;
     setSaving(true);
     setSaveError(null);
+    setFollowError(null);
 
     try {
       if (avatarFile) {
@@ -207,8 +224,7 @@ export function ProfilePageView({ userId }: { userId?: string }) {
       setAvatarPreview(null);
       if (avatarInputRef.current) avatarInputRef.current.value = '';
     } catch (err) {
-      console.error('Failed to update profile', err);
-      setSaveError('Could not save your changes. Please try again.');
+      setSaveError(err instanceof Error ? err.message : 'Could not save your changes. Please try again.');
     } finally {
       setSaving(false);
       setUploadingAvatar(false);
@@ -220,6 +236,7 @@ export function ProfilePageView({ userId }: { userId?: string }) {
 
     const wasFollowing = Boolean(profile.is_following);
     setFollowLoading(true);
+    setFollowError(null);
 
     try {
       if (wasFollowing) {
@@ -242,7 +259,7 @@ export function ProfilePageView({ userId }: { userId?: string }) {
         };
       });
     } catch (err) {
-      console.error('Failed to update follow state', err);
+      setFollowError(err instanceof Error ? err.message : 'Could not update follow state.');
     } finally {
       setFollowLoading(false);
     }
@@ -250,6 +267,9 @@ export function ProfilePageView({ userId }: { userId?: string }) {
 
   const openStatsPanel = async (type: StatsPanel) => {
     if (!profile) return;
+    if (!canViewFullProfile) {
+      return;
+    }
     setPanel(emptyPanel(type));
 
     try {
@@ -271,7 +291,11 @@ export function ProfilePageView({ userId }: { userId?: string }) {
       setPanel({
         type,
         loading: false,
-        error: err instanceof Error ? err.message : 'Could not load this list.',
+        error: isForbiddenError(err)
+          ? 'This content is private.'
+          : err instanceof Error
+            ? err.message
+            : 'Could not load this list.',
         users: [],
         posts: [],
       });
@@ -310,10 +334,7 @@ export function ProfilePageView({ userId }: { userId?: string }) {
     return null;
   }
 
-  const isOwnProfile = profile.is_own_profile ?? true;
-  const isFollowing = Boolean(profile.is_following);
-  const isPrivateLimited =
-    !isOwnProfile && !profile.user.is_public && !profile.about_me && !profile.dob;
+  const isPrivateLimited = !canViewFullProfile;
   const avatarUrl = avatarPreview || resolveAssetUrl(profile.user.avatar_path);
   const name = getDisplayName(profile.user);
   const handle = `@${profile.user.first_name.toLowerCase()}${profile.user.last_name.toLowerCase()}`;
@@ -517,24 +538,27 @@ export function ProfilePageView({ userId }: { userId?: string }) {
             </div>
           )}
         </div>
+        {followError ? <p className="mt-4 text-sm text-rose-600">{followError}</p> : null}
 
-        <div className="mt-8 grid gap-4 sm:grid-cols-3">
-          <StatButton
-            label="Followers"
-            value={profile.follower_count}
-            onClick={() => openStatsPanel('followers')}
-          />
-          <StatButton
-            label="Following"
-            value={profile.following_count}
-            onClick={() => openStatsPanel('following')}
-          />
-          <StatButton
-            label="Posts"
-            value={profile.post_count}
-            onClick={() => openStatsPanel('posts')}
-          />
-        </div>
+        {canViewFullProfile && (
+          <div className="mt-8 grid gap-4 sm:grid-cols-3">
+            <StatButton
+              label="Followers"
+              value={profile.follower_count}
+              onClick={() => openStatsPanel('followers')}
+            />
+            <StatButton
+              label="Following"
+              value={profile.following_count}
+              onClick={() => openStatsPanel('following')}
+            />
+            <StatButton
+              label="Posts"
+              value={profile.post_count}
+              onClick={() => openStatsPanel('posts')}
+            />
+          </div>
+        )}
       </div>
 
       {isPrivateLimited ? (
@@ -544,7 +568,7 @@ export function ProfilePageView({ userId }: { userId?: string }) {
           </div>
           <h2 className="mt-4 text-xl font-semibold text-gray-900">This profile is private</h2>
           <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-gray-500">
-            Follow this person to see their about section, birthday, and more profile details.
+            Follow this person to see their posts, followers, following, and profile details.
           </p>
         </div>
       ) : (

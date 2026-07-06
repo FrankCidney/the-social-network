@@ -4,7 +4,12 @@ import * as React from 'react';
 import { motion } from 'framer-motion';
 import { Bell, CheckCircle2, Clock3, MessageSquare, Sparkles, Users } from 'lucide-react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
-import { notificationsAPI, NotificationItem, NotificationListResponse } from '@/lib/api';
+import {
+  isAuthenticationError,
+  notificationsAPI,
+  NotificationItem,
+  NotificationListResponse,
+} from '@/lib/api';
 
 function formatTimestamp(value: string) {
   const date = new Date(value);
@@ -88,8 +93,9 @@ export default function NotificationsPage() {
       setNotifications(unwrapNotifications(data));
       setError(null);
     } catch (err) {
-      console.error('Failed to load notifications', err);
-      setError('Could not load your notifications.');
+      if (!isAuthenticationError(err)) {
+        setError(err instanceof Error ? err.message : 'Could not load your notifications.');
+      }
     } finally {
       setLoading(false);
     }
@@ -143,8 +149,8 @@ export default function NotificationsPage() {
     try {
       await notificationsAPI.markAsRead(notificationId);
     } catch (err) {
-      console.error('Failed to mark notification as read', err);
       setNotifications(previous); // roll back on failure
+      setError(err instanceof Error ? err.message : 'Could not update this notification.');
     }
   };
 
@@ -156,9 +162,8 @@ export default function NotificationsPage() {
       setMarkingAll(true);
       await notificationsAPI.markAllAsRead();
     } catch (err) {
-      console.error('Failed to mark all as read', err);
       setNotifications(previous);
-      setError('Could not mark everything as read. Please try again.');
+      setError(err instanceof Error ? err.message : 'Could not mark everything as read. Please try again.');
     } finally {
       setMarkingAll(false);
     }

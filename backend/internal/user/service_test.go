@@ -125,6 +125,9 @@ func TestGetProfile(t *testing.T) {
 				if !profile.IsOwnProfile {
 					t.Error("owner profile should be marked as own profile")
 				}
+				if !profile.CanViewFullProfile {
+					t.Error("owner should be allowed to view full profile")
+				}
 				if profile.Email != "target@example.com" {
 					t.Errorf("owner should see email, got %q", profile.Email)
 				}
@@ -155,6 +158,9 @@ func TestGetProfile(t *testing.T) {
 			assertRes: func(t *testing.T, profile *models.Profile) {
 				if profile.IsOwnProfile {
 					t.Error("public non-owner profile should not be marked as own profile")
+				}
+				if !profile.CanViewFullProfile {
+					t.Error("public profile should be fully visible")
 				}
 				if profile.Email != "" {
 					t.Errorf("non-owner should not see email, got %q", profile.Email)
@@ -189,6 +195,9 @@ func TestGetProfile(t *testing.T) {
 				if !profile.IsFollowing {
 					t.Error("confirmed follower should be marked as following")
 				}
+				if !profile.CanViewFullProfile {
+					t.Error("confirmed follower should be allowed to view full profile")
+				}
 				if profile.Email != "" {
 					t.Errorf("follower should not see email, got %q", profile.Email)
 				}
@@ -217,8 +226,14 @@ func TestGetProfile(t *testing.T) {
 				if profile.AboutMe != "" || profile.DOB != "" {
 					t.Error("non-follower should NOT see about me or dob on private profile")
 				}
+				if profile.CanViewFullProfile {
+					t.Error("non-follower should not be allowed to view full profile")
+				}
 				if profile.IsFollowing {
 					t.Error("non-follower should not be marked as following")
+				}
+				if profile.FollowerCount != 0 || profile.FollowingCount != 0 || profile.PostCount != 0 {
+					t.Errorf("restricted private profile should not expose counts: %+v", profile)
 				}
 				if profile.Email != "" {
 					t.Errorf("non-owner should not see email, got %q", profile.Email)
@@ -249,6 +264,9 @@ func TestGetProfile(t *testing.T) {
 			assertRes: func(t *testing.T, profile *models.Profile) {
 				if profile.FollowRequestStatus != "pending" {
 					t.Errorf("expected pending follow request, got %q", profile.FollowRequestStatus)
+				}
+				if profile.CanViewFullProfile {
+					t.Error("pending requester should not be allowed to view full profile")
 				}
 				if profile.IsFollowing {
 					t.Error("pending request should not be marked as following")
@@ -681,7 +699,7 @@ func TestGetFollowersAndFollowing(t *testing.T) {
 				_ = follows.CreateFollower(userID, "f2")
 			},
 			testFunc: func(t *testing.T, svc Service) {
-				followers, err := svc.GetFollowers(userID, 10, 0)
+				followers, err := svc.GetFollowers(userID, userID, 10, 0)
 				if err != nil {
 					t.Fatalf("GetFollowers failed: %v", err)
 				}
@@ -689,7 +707,7 @@ func TestGetFollowersAndFollowing(t *testing.T) {
 					t.Errorf("unexpected followers list: %+v", followers)
 				}
 
-				following, err := svc.GetFollowing(userID, 10, 0)
+				following, err := svc.GetFollowing(userID, userID, 10, 0)
 				if err != nil {
 					t.Fatalf("GetFollowing failed: %v", err)
 				}
@@ -701,7 +719,7 @@ func TestGetFollowersAndFollowing(t *testing.T) {
 		{
 			name: "User not found GetFollowers",
 			testFunc: func(t *testing.T, svc Service) {
-				_, err := svc.GetFollowers("nonexistent", 10, 0)
+				_, err := svc.GetFollowers("viewer", "nonexistent", 10, 0)
 				if !errors.Is(err, apperror.ErrNotFound) {
 					t.Errorf("expected ErrNotFound, got %v", err)
 				}
@@ -710,9 +728,31 @@ func TestGetFollowersAndFollowing(t *testing.T) {
 		{
 			name: "User not found GetFollowing",
 			testFunc: func(t *testing.T, svc Service) {
-				_, err := svc.GetFollowing("nonexistent", 10, 0)
+				_, err := svc.GetFollowing("viewer", "nonexistent", 10, 0)
 				if !errors.Is(err, apperror.ErrNotFound) {
 					t.Errorf("expected ErrNotFound, got %v", err)
+				}
+			},
+		},
+		{
+			name: "Private profile hides follower and following lists from non-followers",
+			setupDB: func(t *testing.T, db *sql.DB, users repository.UserRepository, follows repository.FollowRepository) {
+				_ = users.CreateUser(&models.User{ID: "viewer", Email: "viewer@example.com"})
+				_ = users.CreateUser(&models.User{ID: userID, Email: "user@example.com", IsPublic: false})
+				_ = users.CreateUser(&models.User{ID: "f1", Email: "f1@example.com"})
+				_ = users.CreateUser(&models.User{ID: "f2", Email: "f2@example.com"})
+				_ = follows.CreateFollower("f1", userID)
+				_ = follows.CreateFollower(userID, "f2")
+			},
+			testFunc: func(t *testing.T, svc Service) {
+				_, err := svc.GetFollowers("viewer", userID, 10, 0)
+				if !errors.Is(err, apperror.ErrForbidden) {
+					t.Fatalf("expected forbidden on followers, got %v", err)
+				}
+
+				_, err = svc.GetFollowing("viewer", userID, 10, 0)
+				if !errors.Is(err, apperror.ErrForbidden) {
+					t.Fatalf("expected forbidden on following, got %v", err)
 				}
 			},
 		},
@@ -723,7 +763,7 @@ func TestGetFollowersAndFollowing(t *testing.T) {
 				_, _ = db.Exec("DROP TABLE followers")
 			},
 			testFunc: func(t *testing.T, svc Service) {
-				_, err := svc.GetFollowers(userID, 10, 0)
+				_, err := svc.GetFollowers(userID, userID, 10, 0)
 				if err == nil {
 					t.Error("expected database error, got nil")
 				}

@@ -44,7 +44,7 @@ type Service interface {
 	GetGroupPosts(viewerID, groupID string, limit, offset int) (*models.PostListResponse, error)
 
 	CanViewPost(viewerID, postID string) (bool, error)
-	// IsPostOwner reports whether userID is the author of postID. Used by comment.Service to let a post's owner delete comments on their own post, in addition 
+	// IsPostOwner reports whether userID is the author of postID. Used by comment.Service to let a post's owner delete comments on their own post, in addition
 	// to commenters deleting their own.
 	IsPostOwner(userID, postID string) (bool, error)
 }
@@ -181,7 +181,7 @@ func (s *service) UploadPostImage(authorID, postID string, file multipart.File, 
 	if p.UserID != authorID {
 		return "", apperror.NotFound("post not found")
 	}
- 
+
 	if header.Size > mediavalidate.MaxImageSize {
 		return "", apperror.BadInput("image must be under 5 MB")
 	}
@@ -189,7 +189,7 @@ func (s *service) UploadPostImage(authorID, postID string, file multipart.File, 
 	if !mediavalidate.AllowedImageExts[ext] {
 		return "", apperror.BadInput("image must be a JPEG, PNG, or GIF")
 	}
- 
+
 	buf := make([]byte, 512)
 	n, err := file.Read(buf)
 	if err != nil {
@@ -201,37 +201,37 @@ func (s *service) UploadPostImage(authorID, postID string, file multipart.File, 
 	if _, err := file.Seek(0, 0); err != nil {
 		return "", apperror.Internal("could not process file")
 	}
- 
+
 	if err := os.MkdirAll(postUploadDir, 0o755); err != nil {
 		return "", apperror.Internal("could not create upload directory")
 	}
- 
+
 	filename := fmt.Sprintf("%s_%d%s", postID, time.Now().UnixNano(), ext)
 	destPath := filepath.Join(postUploadDir, filename)
- 
+
 	dest, err := os.Create(destPath)
 	if err != nil {
 		return "", apperror.Internal("could not save image")
 	}
 	defer dest.Close()
- 
+
 	if _, err := dest.ReadFrom(file); err != nil {
 		_ = os.Remove(destPath)
 		return "", apperror.Internal("could not write image")
 	}
- 
+
 	p.ImageURL = destPath
 	if err := s.posts.UpdatePost(p); err != nil {
 		_ = os.Remove(destPath)
 		return "", err
 	}
- 
+
 	return destPath, nil
 }
 
 func (s *service) GetFeed(viewerID string, limit, offset int) (*models.PostListResponse, error) {
 	limit, offset = paginate.ClampPagination(limit, offset)
- 
+
 	posts, err := s.posts.GetFeedForUser(viewerID, limit, offset)
 	if err != nil {
 		return nil, err
@@ -240,18 +240,26 @@ func (s *service) GetFeed(viewerID string, limit, offset int) (*models.PostListR
 	if err != nil {
 		return nil, err
 	}
- 
+
 	responses, err := s.attachAuthors(posts)
 	if err != nil {
 		return nil, err
 	}
- 
+
 	return &models.PostListResponse{Posts: responses, Total: total, Limit: limit, Offset: offset}, nil
 }
 
 func (s *service) GetPostsByAuthor(viewerID, authorID string, limit, offset int) (*models.PostListResponse, error) {
+	author, err := s.users.GetUserByID(authorID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.ensureAuthorPostsVisible(viewerID, author); err != nil {
+		return nil, err
+	}
+
 	limit, offset = paginate.ClampPagination(limit, offset)
- 
+
 	posts, err := s.posts.GetPostsByAuthor(viewerID, authorID, limit, offset)
 	if err != nil {
 		return nil, err
@@ -260,13 +268,29 @@ func (s *service) GetPostsByAuthor(viewerID, authorID string, limit, offset int)
 	if err != nil {
 		return nil, err
 	}
- 
+
 	responses, err := s.attachAuthors(posts)
 	if err != nil {
 		return nil, err
 	}
- 
+
 	return &models.PostListResponse{Posts: responses, Total: total, Limit: limit, Offset: offset}, nil
+}
+
+func (s *service) ensureAuthorPostsVisible(viewerID string, author *models.User) error {
+	if viewerID == author.ID || author.IsPublic {
+		return nil
+	}
+
+	isFollowing, err := s.follows.IsFollowing(viewerID, author.ID)
+	if err != nil {
+		return fmt.Errorf("check following: %w", err)
+	}
+	if isFollowing {
+		return nil
+	}
+
+	return apperror.Forbidden("this profile is private")
 }
 
 func (s *service) GetGroupPosts(viewerID, groupID string, limit, offset int) (*models.PostListResponse, error) {
@@ -277,9 +301,9 @@ func (s *service) GetGroupPosts(viewerID, groupID string, limit, offset int) (*m
 	if !member {
 		return nil, apperror.Forbidden("you must be a member of this group to view its posts")
 	}
- 
+
 	limit, offset = paginate.ClampPagination(limit, offset)
- 
+
 	posts, err := s.posts.GetPostsForGroup(groupID, limit, offset)
 	if err != nil {
 		return nil, err
@@ -288,12 +312,12 @@ func (s *service) GetGroupPosts(viewerID, groupID string, limit, offset int) (*m
 	if err != nil {
 		return nil, err
 	}
- 
+
 	responses, err := s.attachAuthors(posts)
 	if err != nil {
 		return nil, err
 	}
- 
+
 	return &models.PostListResponse{Posts: responses, Total: total, Limit: limit, Offset: offset}, nil
 }
 
@@ -348,7 +372,7 @@ func normalizePrivacy(v string) (string, error) {
 	}
 }
 
-// validatePrivacyInvariants enforces the rules the DB CHECK constraints also encode, but does it in the service layer so we get a clear 
+// validatePrivacyInvariants enforces the rules the DB CHECK constraints also encode, but does it in the service layer so we get a clear
 // apperror.BadInput instead of an opaque SQLite constraint-violation error.
 func (s *service) validatePrivacyInvariants(authorID, privacy string, groupID *string, visibleTo []string) error {
 	switch privacy {
@@ -407,7 +431,7 @@ func (s *service) attachAuthors(posts []*models.Post) ([]*models.PostResponse, e
 	out := make([]*models.PostResponse, 0, len(posts))
 	// Cache lookups within a single page. A feed page can easily contain several posts from the same author.
 	cache := make(map[string]*models.User)
- 
+
 	for _, p := range posts {
 		author, ok := cache[p.UserID]
 		if !ok {

@@ -2,13 +2,15 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { authAPI } from '@/lib/api';
+import { authAPI, profileAPI } from '@/lib/api';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = searchParams.get('next') || '/feed';
 
   const [formData, setFormData] = React.useState({
     first_name: '',
@@ -17,17 +19,40 @@ export default function RegisterPage() {
     password: '',
     dob: '',
     nickname: '',
+    about_me: '',
   });
+  const [avatarFile, setAvatarFile] = React.useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = React.useState<string | null>(null);
 
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState('');
   const [success, setSuccess] = React.useState('');
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  React.useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreviewUrl(null);
+      return;
+    }
+
+    const nextPreviewUrl = URL.createObjectURL(avatarFile);
+    setAvatarPreviewUrl(nextPreviewUrl);
+
+    return () => {
+      URL.revokeObjectURL(nextPreviewUrl);
+    };
+  }, [avatarFile]);
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     setFormData((prev) => ({
       ...prev,
       [e.target.name]: e.target.value,
     }));
+  };
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAvatarFile(e.target.files?.[0] ?? null);
   };
 
   const handleSubmit = async (
@@ -41,11 +66,14 @@ export default function RegisterPage() {
 
     try {
       await authAPI.register(formData);
+      if (avatarFile) {
+        await profileAPI.uploadAvatar(avatarFile);
+      }
 
       setSuccess('Registration successful! Redirecting...');
 
       setTimeout(() => {
-        router.push('/feed');
+        router.push(nextPath);
       }, 1500);
 
     } catch (err) {
@@ -136,6 +164,42 @@ export default function RegisterPage() {
             onChange={handleChange}
           />
 
+          <div className="space-y-1.5">
+            <label className="ml-1 block text-sm font-medium text-gray-700">
+              About Me
+            </label>
+            <textarea
+              name="about_me"
+              value={formData.about_me}
+              onChange={handleChange}
+              placeholder="Tell people a little about yourself"
+              rows={4}
+              className="w-full rounded-bento border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="ml-1 block text-sm font-medium text-gray-700">
+              Avatar / Image
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarChange}
+              className="w-full rounded-bento border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 file:mr-3 file:rounded-bento file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm file:font-medium"
+            />
+            {avatarPreviewUrl ? (
+              <div className="flex items-center gap-3 rounded-bento border border-gray-200 bg-gray-50 p-3">
+                <img
+                  src={avatarPreviewUrl}
+                  alt="Avatar preview"
+                  className="h-14 w-14 rounded-full object-cover"
+                />
+                <p className="text-sm text-gray-500">Avatar preview</p>
+              </div>
+            ) : null}
+          </div>
+
           {error && (
             <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-600">
               {error}
@@ -163,7 +227,7 @@ export default function RegisterPage() {
         <p className="mt-6 text-center text-sm text-gray-500">
           Already have an account?{' '}
           <Link
-            href="/login"
+            href={nextPath === '/feed' ? '/login' : `/login?next=${encodeURIComponent(nextPath)}`}
             className="text-indigo-600 hover:underline"
           >
             Sign in

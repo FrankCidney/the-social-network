@@ -20,8 +20,8 @@ type Service interface {
 	UpdateProfile(userID string, req models.UpdateProfileRequest) error
 	SetProfileVisibility(userID string, isPublic bool) error
 	UploadAvatar(userID string, file multipart.File, header *multipart.FileHeader) (string, error)
-	GetFollowers(userID string, limit, offset int) (*models.FollowListResponse, error)
-	GetFollowing(userID string, limit, offset int) (*models.FollowListResponse, error)
+	GetFollowers(viewerID, targetID string, limit, offset int) (*models.FollowListResponse, error)
+	GetFollowing(viewerID, targetID string, limit, offset int) (*models.FollowListResponse, error)
 	SearchUsers(viewerID, query string, limit int, excludeGroupID string) ([]*models.UserSearchResult, error)
 }
 
@@ -55,39 +55,26 @@ func (s *service) GetProfile(viewerID, targetID string) (*models.Profile, error)
 	if err != nil {
 		return nil, err
 	}
-
-	followerCount, err := s.follows.GetFollowerCount(targetID)
+	isOwnProfile, isFollowing, followRequestStatus, canViewFullProfile, err := s.profileVisibility(viewerID, target)
 	if err != nil {
-		return nil, fmt.Errorf("get follower count: %w", err)
-	}
-	followingCount, err := s.follows.GetFollowingCount(targetID)
-	if err != nil {
-		return nil, fmt.Errorf("get following count: %w", err)
-	}
-	postCount, err := s.getPostCount(targetID)
-	if err != nil {
-		return nil, fmt.Errorf("get post count: %w", err)
+		return nil, err
 	}
 
-	isOwnProfile := viewerID == targetID
-	isFollowing := false
-	followRequestStatus := ""
-
-	if !isOwnProfile {
-		isFollowing, err = s.follows.IsFollowing(viewerID, targetID)
+	followerCount := 0
+	followingCount := 0
+	postCount := 0
+	if canViewFullProfile {
+		followerCount, err = s.follows.GetFollowerCount(targetID)
 		if err != nil {
-			return nil, fmt.Errorf("check following: %w", err)
+			return nil, fmt.Errorf("get follower count: %w", err)
 		}
-
-		if !isFollowing {
-			followRequest, err := s.follows.GetFollowRequest(viewerID, targetID)
-			if err != nil {
-				if !errors.Is(err, apperror.ErrNotFound) {
-					return nil, fmt.Errorf("get follow request: %w", err)
-				}
-			} else {
-				followRequestStatus = followRequest.Status
-			}
+		followingCount, err = s.follows.GetFollowingCount(targetID)
+		if err != nil {
+			return nil, fmt.Errorf("get following count: %w", err)
+		}
+		postCount, err = s.getPostCount(targetID)
+		if err != nil {
+			return nil, fmt.Errorf("get post count: %w", err)
 		}
 	}
 
@@ -96,35 +83,48 @@ func (s *service) GetProfile(viewerID, targetID string) (*models.Profile, error)
 		FollowerCount:       followerCount,
 		FollowingCount:      followingCount,
 		PostCount:           postCount,
+		CanViewFullProfile:  canViewFullProfile,
 		IsOwnProfile:        isOwnProfile,
 		IsFollowing:         isFollowing,
 		FollowRequestStatus: followRequestStatus,
 	}
 
-	// Visibility
-	// Owner always gets full profile.
-	if isOwnProfile {
-		profile.Email = target.Email
+	if canViewFullProfile {
+		if isOwnProfile {
+			profile.Email = target.Email
+		}
 		profile.AboutMe = target.AboutMe
 		profile.DOB = target.DOB
-		return profile, nil
-	}
-
-	// Public profile: Show full data.
-	if target.IsPublic {
-		profile.AboutMe = target.AboutMe
-		profile.DOB = target.DOB
-		return profile, nil
-	}
-
-	// Private profile: Show full data only if the viewer is a confirmed follower.
-	if isFollowing {
-		profile.AboutMe = target.AboutMe
-		profile.DOB = target.DOB
-		return profile, nil
 	}
 
 	return profile, nil
+}
+
+func (s *service) profileVisibility(viewerID string, target *models.User) (bool, bool, string, bool, error) {
+	isOwnProfile := viewerID == target.ID
+	if isOwnProfile {
+		return true, false, "", true, nil
+	}
+
+	isFollowing, err := s.follows.IsFollowing(viewerID, target.ID)
+	if err != nil {
+		return false, false, "", false, fmt.Errorf("check following: %w", err)
+	}
+
+	followRequestStatus := ""
+	if !isFollowing {
+		followRequest, err := s.follows.GetFollowRequest(viewerID, target.ID)
+		if err != nil {
+			if !errors.Is(err, apperror.ErrNotFound) {
+				return false, false, "", false, fmt.Errorf("get follow request: %w", err)
+			}
+		} else {
+			followRequestStatus = followRequest.Status
+		}
+	}
+
+	canViewFullProfile := target.IsPublic || isFollowing
+	return false, isFollowing, followRequestStatus, canViewFullProfile, nil
 }
 
 func (s *service) getPostCount(userID string) (int, error) {
@@ -231,21 +231,23 @@ func (s *service) UploadAvatar(userID string, file multipart.File, header *multi
 	return destPath, nil
 }
 
-func (s *service) GetFollowers(userID string, limit, offset int) (*models.FollowListResponse, error) {
+func (s *service) GetFollowers(viewerID, targetID string, limit, offset int) (*models.FollowListResponse, error) {
 	limit, offset = paginate.ClampPagination(limit, offset)
 
-	// Verify user exists
-	_, err := s.users.GetUserByID(userID)
+	target, err := s.users.GetUserByID(targetID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.ensureProfileListVisible(viewerID, target); err != nil {
+		return nil, err
+	}
+
+	users, err := s.follows.GetFollowers(targetID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
 
-	users, err := s.follows.GetFollowers(userID, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-
-	total, err := s.follows.GetFollowerCount(userID)
+	total, err := s.follows.GetFollowerCount(targetID)
 	if err != nil {
 		return nil, err
 	}
@@ -258,21 +260,23 @@ func (s *service) GetFollowers(userID string, limit, offset int) (*models.Follow
 	}, nil
 }
 
-func (s *service) GetFollowing(userID string, limit, offset int) (*models.FollowListResponse, error) {
+func (s *service) GetFollowing(viewerID, targetID string, limit, offset int) (*models.FollowListResponse, error) {
 	limit, offset = paginate.ClampPagination(limit, offset)
 
-	// Verify user exists
-	_, err := s.users.GetUserByID(userID)
+	target, err := s.users.GetUserByID(targetID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.ensureProfileListVisible(viewerID, target); err != nil {
+		return nil, err
+	}
+
+	users, err := s.follows.GetFollowing(targetID, limit, offset)
 	if err != nil {
 		return nil, err
 	}
 
-	users, err := s.follows.GetFollowing(userID, limit, offset)
-	if err != nil {
-		return nil, err
-	}
-
-	total, err := s.follows.GetFollowingCount(userID)
+	total, err := s.follows.GetFollowingCount(targetID)
 	if err != nil {
 		return nil, err
 	}
@@ -283,6 +287,18 @@ func (s *service) GetFollowing(userID string, limit, offset int) (*models.Follow
 		Limit:  limit,
 		Offset: offset,
 	}, nil
+}
+
+func (s *service) ensureProfileListVisible(viewerID string, target *models.User) error {
+	isOwnProfile, _, _, canViewFullProfile, err := s.profileVisibility(viewerID, target)
+	if err != nil {
+		return err
+	}
+	if isOwnProfile || canViewFullProfile {
+		return nil
+	}
+
+	return apperror.Forbidden("this profile is private")
 }
 
 func (s *service) SearchUsers(viewerID, query string, limit int, excludeGroupID string) ([]*models.UserSearchResult, error) {

@@ -81,10 +81,11 @@ func (h *UserHandler) UploadAvatar(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/users/{id}/followers
 func (h *UserHandler) GetFollowers(w http.ResponseWriter, r *http.Request) {
+	viewer := middleware.UserFromContext(r.Context())
 	userID := r.PathValue("id")
 	limit, offset := parsePagination(r)
 
-	result, err := h.userService.GetFollowers(userID, limit, offset)
+	result, err := h.userService.GetFollowers(viewer.ID, userID, limit, offset)
 	if err != nil {
 		writeServiceError(w, err)
 		return
@@ -94,10 +95,11 @@ func (h *UserHandler) GetFollowers(w http.ResponseWriter, r *http.Request) {
 
 // GET /api/users/{id}/following
 func (h *UserHandler) GetFollowing(w http.ResponseWriter, r *http.Request) {
+	viewer := middleware.UserFromContext(r.Context())
 	userID := r.PathValue("id")
 	limit, offset := parsePagination(r)
 
-	result, err := h.userService.GetFollowing(userID, limit, offset)
+	result, err := h.userService.GetFollowing(viewer.ID, userID, limit, offset)
 	if err != nil {
 		writeServiceError(w, err)
 		return

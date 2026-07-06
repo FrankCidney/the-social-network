@@ -4,6 +4,24 @@ type RequestOptions = Omit<RequestInit, 'body'> & {
   body?: BodyInit | Record<string, unknown> | unknown[];
 };
 
+export class ApiError extends Error {
+	status: number;
+
+	constructor(message: string, status: number) {
+		super(message);
+		this.name = 'ApiError';
+		this.status = status;
+	}
+}
+
+export function isAuthenticationError(error: unknown) {
+	return error instanceof ApiError && error.status === 401;
+}
+
+export function isForbiddenError(error: unknown) {
+	return error instanceof ApiError && error.status === 403;
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers(options.headers);
   const isFormData = options.body instanceof FormData;
@@ -27,7 +45,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   });
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response));
+    throw new ApiError(await getErrorMessage(response), response.status);
   }
 
   if (response.status === 204) {
@@ -66,6 +84,7 @@ export type RegisterPayload = {
 	last_name: string;
 	dob: string;
 	nickname?: string;
+	about_me?: string;
 };
 
 export type LoginPayload = {
@@ -113,6 +132,7 @@ export type ProfileResponse = {
 	follower_count: number;
 	following_count: number;
 	post_count: number;
+	can_view_full_profile?: boolean;
 	is_own_profile?: boolean;
 	is_following?: boolean;
 	follow_request_status?: 'pending' | 'accepted' | 'declined';
@@ -256,6 +276,12 @@ export const authAPI = {
 		return request<AuthResponse>('/api/auth/login', {
 			method: 'POST',
 			body: payload,
+		});
+	},
+
+	logout() {
+		return request<void>('/api/auth/logout', {
+			method: 'POST',
 		});
 	},
 };
