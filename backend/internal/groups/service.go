@@ -8,7 +8,7 @@ import (
 	"social-network/internal/models"
 	"social-network/internal/repository"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 type Service interface {
@@ -54,7 +54,7 @@ func (s *service) CreateGroup(userID string, req *models.CreateGroupRequest) (*m
 	}
 
 	g := &models.Group{
-		ID:          uuid.NewString(),
+		ID:          uuid.Must(uuid.NewV4()).String(),
 		CreatorID:   userID,
 		Title:       req.Title,
 		Description: req.Description,
@@ -181,7 +181,7 @@ func (s *service) InviteUser(groupID, inviterID, inviteeID string) error {
 
 	if s.notifier != nil {
 		_ = s.notifier.NotifyUser(inviteeID, &models.Notification{
-			ID:        uuid.NewString(),
+			ID:        uuid.Must(uuid.NewV4()).String(),
 			UserID:    inviteeID,
 			ActorID:   inviterID,
 			Type:      "group_invite",
@@ -289,7 +289,7 @@ func (s *service) CreateEvent(userID string, groupID string, req *models.CreateE
 	}
 
 	e := &models.Event{
-		ID:          uuid.NewString(),
+		ID:          uuid.Must(uuid.NewV4()).String(),
 		GroupID:     groupID,
 		CreatorID:   userID,
 		Title:       req.Title,
@@ -312,7 +312,7 @@ func (s *service) CreateEvent(userID string, groupID string, req *models.CreateE
 			}
 		}
 		_ = s.notifier.NotifyGroup(memberIDs, &models.Notification{
-			ID:        uuid.NewString(),
+			ID:        uuid.Must(uuid.NewV4()).String(),
 			ActorID:   userID,
 			Type:      "group_event",
 			GroupID:   &groupID,

@@ -8,13 +8,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gofrs/uuid/v5"
 	"golang.org/x/crypto/bcrypt"
-	"github.com/google/uuid"
 )
 
 const (
 	minPasswordLen  = 8
-	bcryptCost = 12
+	bcryptCost      = 12
 	sessionDuration = 7 * 24 * time.Hour
 )
 
@@ -45,7 +45,7 @@ func (s *service) Register(req models.RegisterRequest) (*models.AuthResponse, er
 	}
 
 	user := &models.User{
-		ID:        uuid.NewString(),
+		ID:        uuid.Must(uuid.NewV4()).String(),
 		Email:     strings.ToLower(strings.TrimSpace(req.Email)),
 		Password:  string(hash),
 		FirstName: strings.TrimSpace(req.FirstName),
@@ -67,12 +67,12 @@ func (s *service) Register(req models.RegisterRequest) (*models.AuthResponse, er
 	}
 
 	return &models.AuthResponse{
-		User: user.ToPublic(),
+		User:  user.ToPublic(),
 		Token: session.Token,
 	}, nil
 }
 
-func (s *service) Login(email, password string) (*models.AuthResponse, error)  {
+func (s *service) Login(email, password string) (*models.AuthResponse, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" || password == "" {
 		return nil, apperror.BadInput("email and password are required")
@@ -82,7 +82,7 @@ func (s *service) Login(email, password string) (*models.AuthResponse, error)  {
 	if err != nil {
 		return nil, err
 	}
- 
+
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
 		return nil, apperror.Unauthorized("invalid credentials")
 	}
@@ -91,7 +91,7 @@ func (s *service) Login(email, password string) (*models.AuthResponse, error)  {
 	if err != nil {
 		return nil, err
 	}
- 
+
 	return &models.AuthResponse{
 		User:  user.ToPublic(),
 		Token: session.Token,
@@ -106,7 +106,7 @@ func (s *service) ValidateSession(token string) (*models.User, error) {
 	if token == "" {
 		return nil, apperror.Unauthorized("missing session token")
 	}
- 
+
 	session, err := s.sessions.GetSessionByToken(token)
 	if err != nil {
 		return nil, err
@@ -131,7 +131,7 @@ func (s *service) ValidateSession(token string) (*models.User, error) {
 }
 
 func validateRegisterRequest(req models.RegisterRequest) error {
-	req.Email= strings.TrimSpace(req.Email)
+	req.Email = strings.TrimSpace(req.Email)
 	req.FirstName = strings.TrimSpace(req.FirstName)
 	req.LastName = strings.TrimSpace(req.LastName)
 
@@ -158,8 +158,8 @@ func validateRegisterRequest(req models.RegisterRequest) error {
 }
 
 func (s *service) createSession(userID string) (*models.Session, error) {
-	token := uuid.NewString()
- 
+	token := uuid.Must(uuid.NewV4()).String()
+
 	now := time.Now().UTC()
 	session := &models.Session{
 		Token:     token,
@@ -167,10 +167,10 @@ func (s *service) createSession(userID string) (*models.Session, error) {
 		CreatedAt: now.Format(time.RFC3339),
 		ExpiresAt: now.Add(sessionDuration).Format(time.RFC3339),
 	}
- 
+
 	if err := s.sessions.CreateSession(session); err != nil {
 		return nil, fmt.Errorf("persist session: %w", err)
 	}
- 
+
 	return session, nil
 }

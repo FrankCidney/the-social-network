@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 const (
@@ -80,7 +80,7 @@ func (s *service) CreatePost(authorID string, req models.CreatePostRequest) (*mo
 	}
 
 	p := &models.Post{
-		ID:        uuid.NewString(),
+		ID:        uuid.Must(uuid.NewV4()).String(),
 		UserID:    authorID,
 		GroupID:   req.GroupID,
 		Content:   content,

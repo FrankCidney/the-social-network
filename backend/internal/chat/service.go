@@ -10,7 +10,7 @@ import (
 	"social-network/internal/shared/paginate"
 	"social-network/internal/websocket"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 type SendMessageRequest struct {
@@ -53,7 +53,7 @@ func (s *service) SendMessage(senderID string, req *SendMessageRequest) (*models
 	}
 
 	m := &models.Message{
-		ID:         uuid.NewString(),
+		ID:         uuid.Must(uuid.NewV4()).String(),
 		SenderID:   senderID,
 		ReceiverID: req.ReceiverID,
 		GroupID:    req.GroupID,

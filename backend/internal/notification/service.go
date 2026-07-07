@@ -6,7 +6,7 @@ import (
 	"social-network/internal/shared/paginate"
 	"time"
 
-	"github.com/google/uuid"
+	"github.com/gofrs/uuid/v5"
 )
 
 type Broadcaster interface {
@@ -78,7 +78,7 @@ func (s *service) NotifyUser(userID string, notification *models.Notification) e
 	}
 
 	next := *notification
-	next.ID = uuid.NewString()
+	next.ID = uuid.Must(uuid.NewV4()).String()
 	next.UserID = userID
 	next.IsRead = false
 	next.IsResolved = false
