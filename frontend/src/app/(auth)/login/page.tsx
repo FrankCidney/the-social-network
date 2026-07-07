@@ -99,7 +99,7 @@ export default function LoginPage() {
 			</form>
 
 			<div className="text-center text-sm">
-				<span className="text-gray-500">Don't have an account? </span>
+				<span className="text-gray-500">Don&apos;t have an account? </span>
 				<Link
 					href={nextPath === '/feed' ? '/register' : `/register?next=${encodeURIComponent(nextPath)}`}
 					className="font-medium text-primary hover:underline"
