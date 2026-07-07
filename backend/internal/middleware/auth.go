@@ -7,12 +7,13 @@ import (
 	"net/http"
 	"social-network/internal/apperror"
 	"social-network/internal/auth"
+	"social-network/internal/config"
 	"social-network/internal/models"
 	"social-network/internal/response"
 )
 
 type contextKey string
- 
+
 const UserContextKey contextKey = "user"
 
 func RequireAuth(authService auth.Service, next http.Handler) http.Handler {
@@ -33,7 +34,7 @@ func RequireAuth(authService auth.Service, next http.Handler) http.Handler {
 
 				return
 			}
-			
+
 			slog.Error("unhandled error reached auth middleware", "error", err)
 			response.Error(w, apperror.Internal("authentication failed"), http.StatusInternalServerError)
 			return
@@ -60,5 +61,6 @@ func expiredCookie() *http.Cookie {
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   config.SecureCookiesEnabled(),
 	}
 }

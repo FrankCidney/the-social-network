@@ -2,6 +2,7 @@ package chat
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"social-network/internal/apperror"
@@ -44,7 +45,8 @@ func NewService(msgRepo repository.MessageRepository, groupRepo repository.Group
 }
 
 func (s *service) SendMessage(senderID string, req *SendMessageRequest) (*models.Message, error) {
-	if req.Content == "" {
+	content := strings.TrimSpace(req.Content)
+	if content == "" {
 		return nil, apperror.BadInput("content cannot be empty")
 	}
 
@@ -57,7 +59,7 @@ func (s *service) SendMessage(senderID string, req *SendMessageRequest) (*models
 		SenderID:   senderID,
 		ReceiverID: req.ReceiverID,
 		GroupID:    req.GroupID,
-		Content:    req.Content,
+		Content:    content,
 		CreatedAt:  time.Now(),
 	}
 

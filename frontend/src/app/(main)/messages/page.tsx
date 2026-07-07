@@ -4,6 +4,8 @@ import Link from "next/link";
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import { Send, Search, MessageSquare } from "lucide-react";
+import { EmojiPicker } from "@/components/chat/EmojiPicker";
+import { useMessageUnread } from "@/contexts/MessageUnreadContext";
 import { useWebSocket } from "@/contexts/WebSocketContext";
 import {
   chatAPI,
@@ -48,6 +50,7 @@ type MessagesResult = Awaited<ReturnType<typeof chatAPI.getMessages>>;
 
 export default function MessagesPage() {
   const { socket } = useWebSocket();
+  const { markConversationRead } = useMessageUnread();
   const searchParams = useSearchParams();
   const requestedUserId = searchParams.get("user");
 
@@ -70,6 +73,7 @@ export default function MessagesPage() {
   const [newMessage, setNewMessage] = useState("");
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageInputRef = useRef<HTMLInputElement>(null);
 
   // Keep the selected user id in a ref so the WebSocket handler (registered
   // once) always sees the latest selection without re-subscribing.
@@ -168,7 +172,7 @@ export default function MessagesPage() {
       const data = await chatAPI.getMessages(userId);
       setMessages(unwrapMessages(data));
       setMessagesError(null);
-      chatAPI.markConversationRead(userId).catch(() => {});
+      markConversationRead(userId).catch(() => {});
       setConversations((prev) =>
         prev.map((c) => (c.user.id === userId ? { ...c, unread_count: 0 } : c))
       );
@@ -179,7 +183,7 @@ export default function MessagesPage() {
     } finally {
       setMessagesLoading(false);
     }
-  }, []);
+  }, [markConversationRead]);
 
   useEffect(() => {
     if (selectedUserId) {
@@ -232,7 +236,7 @@ export default function MessagesPage() {
 
           return prev.map((message, index) => (index === optimisticIndex ? incoming : message));
         });
-        chatAPI.markConversationRead(incoming.sender_id).catch(() => {});
+        markConversationRead(incoming.sender_id).catch(() => {});
       }
 
       // Bump the relevant conversation's preview/unread badge regardless of
@@ -260,7 +264,7 @@ export default function MessagesPage() {
 
     socket.addEventListener("message", handleMessage);
     return () => socket.removeEventListener("message", handleMessage);
-  }, [socket, currentUser?.id, loadConversations]);
+  }, [socket, currentUser?.id, loadConversations, markConversationRead]);
 
   const filteredConversations = useMemo(
     () =>
@@ -313,6 +317,21 @@ export default function MessagesPage() {
     } finally {
       setSending(false);
     }
+  };
+
+  const insertEmoji = (emoji: string) => {
+    const input = messageInputRef.current;
+    const start = input?.selectionStart ?? newMessage.length;
+    const end = input?.selectionEnd ?? newMessage.length;
+    const nextMessage = `${newMessage.slice(0, start)}${emoji}${newMessage.slice(end)}`;
+
+    setNewMessage(nextMessage);
+
+    requestAnimationFrame(() => {
+      input?.focus();
+      const nextCursor = start + emoji.length;
+      input?.setSelectionRange(nextCursor, nextCursor);
+    });
   };
 
   return (
@@ -486,14 +505,20 @@ export default function MessagesPage() {
             {/* Message Input */}
             <div className="p-4 bg-white border-t border-gray-100">
               <form onSubmit={handleSendMessage} className="flex gap-2">
-                <input
-                  type="text"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  placeholder="Type a message..."
-                  disabled={sending}
-                  className="flex-1 bg-gray-50 border border-gray-200 rounded-full px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
-                />
+                <div className="relative flex-1">
+                  <input
+                    ref={messageInputRef}
+                    type="text"
+                    value={newMessage}
+                    onChange={(e) => setNewMessage(e.target.value)}
+                    placeholder="Type a message..."
+                    disabled={sending}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-full py-2 pl-4 pr-12 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
+                  />
+                  <div className="absolute right-1 top-1/2 -translate-y-1/2">
+                    <EmojiPicker onSelect={insertEmoji} disabled={sending} />
+                  </div>
+                </div>
                 <button
                   type="submit"
                   disabled={!newMessage.trim() || sending}

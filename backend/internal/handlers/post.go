@@ -143,7 +143,6 @@ func (h *PostHandler) GetPostsByAuthor(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, posts)
 }
 
-// TODO: Test this when group membership check has been implemented
 // GET /api/groups/{id}/posts
 func (h *PostHandler) GetGroupPosts(w http.ResponseWriter, r *http.Request) {
 	viewer := middleware.UserFromContext(r.Context())

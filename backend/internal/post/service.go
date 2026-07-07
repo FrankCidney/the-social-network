@@ -404,7 +404,6 @@ func (s *service) validatePrivacyInvariants(authorID, privacy string, groupID *s
 	return nil
 }
 
-// TODO: Update comment. We need isGroupMember check below because s.groups might be nil before groups is implemented
 func (s *service) isGroupMember(userID, groupID string) (bool, error) {
 	if s.groups == nil {
 		return false, nil

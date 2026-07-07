@@ -80,9 +80,6 @@ export default function LoginPage() {
 						autoComplete="current-password"
 					/>
 					<div className="flex justify-end">
-						<button type="button" className="text-xs text-primary hover:underline">
-							Forgot password?
-						</button>
 					</div>
 				</div>
 

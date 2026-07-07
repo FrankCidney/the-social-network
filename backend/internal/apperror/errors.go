@@ -9,12 +9,13 @@ var (
 	ErrForbidden    = errors.New("forbidden")      // authenticated but not allowed
 	ErrBadInput     = errors.New("bad input")      // validation failure
 	ErrInternal     = errors.New("internal error") // unexpected failures
+	ErrRateLimited  = errors.New("rate limited")
 )
 
 // AppError wraps a sentinel with a human-readable message to return to the frontend
 type AppError struct {
-	Err     error  // sentinel errors to use in errors.Is checks to direct app flow
-	Code string
+	Err     error // sentinel errors to use in errors.Is checks to direct app flow
+	Code    string
 	Message string // human readable message to send back to client
 }
 
@@ -50,4 +51,8 @@ func BadInput(msg string) *AppError {
 
 func Internal(msg string) *AppError {
 	return &AppError{Err: ErrInternal, Code: "internal", Message: msg}
+}
+
+func RateLimited(msg string) *AppError {
+	return &AppError{Err: ErrRateLimited, Code: "rate_limited", Message: msg}
 }

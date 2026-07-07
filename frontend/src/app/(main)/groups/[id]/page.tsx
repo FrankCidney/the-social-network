@@ -15,6 +15,7 @@ import {
 	Users,
 	X,
 } from 'lucide-react';
+import { EmojiPicker } from '@/components/chat/EmojiPicker';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import {
@@ -87,6 +88,7 @@ export default function GroupDetailPage() {
 	const [inviteSubmitting, setInviteSubmitting] = React.useState(false);
 	const [inviteError, setInviteError] = React.useState<string | null>(null);
 	const [eventResponses, setEventResponses] = React.useState<Record<string, 'going' | 'not_going'>>({});
+	const messageInputRef = React.useRef<HTMLInputElement>(null);
 
 	React.useEffect(() => {
 		if (!groupId) {
@@ -376,6 +378,21 @@ export default function GroupDetailPage() {
 		}
 	};
 
+	const insertMessageEmoji = (emoji: string) => {
+		const input = messageInputRef.current;
+		const start = input?.selectionStart ?? messageDraft.length;
+		const end = input?.selectionEnd ?? messageDraft.length;
+		const nextDraft = `${messageDraft.slice(0, start)}${emoji}${messageDraft.slice(end)}`;
+
+		setMessageDraft(nextDraft);
+
+		requestAnimationFrame(() => {
+			input?.focus();
+			const nextCursor = start + emoji.length;
+			input?.setSelectionRange(nextCursor, nextCursor);
+		});
+	};
+
 	const handleCreateEvent = async (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 
@@ -601,13 +618,20 @@ export default function GroupDetailPage() {
 									</div>
 
 									<form className="flex gap-3" onSubmit={handleSendMessage}>
-										<input
-											type="text"
-											value={messageDraft}
-											onChange={(event) => setMessageDraft(event.target.value)}
-											placeholder="Send a message..."
-											className="flex-1 rounded-full border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-										/>
+										<div className="relative flex-1">
+											<input
+												ref={messageInputRef}
+												type="text"
+												value={messageDraft}
+												onChange={(event) => setMessageDraft(event.target.value)}
+												placeholder="Send a message..."
+												disabled={messageSubmitting}
+												className="w-full rounded-full border border-gray-200 bg-white py-3 pl-4 pr-12 text-sm text-gray-900 placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-60"
+											/>
+											<div className="absolute right-1.5 top-1/2 -translate-y-1/2">
+												<EmojiPicker onSelect={insertMessageEmoji} disabled={messageSubmitting} />
+											</div>
+										</div>
 										<Button type="submit" disabled={messageSubmitting}>
 											{messageSubmitting ? <Loader className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
 										</Button>

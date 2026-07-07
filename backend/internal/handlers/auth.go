@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"social-network/internal/apperror"
 	"social-network/internal/auth"
+	"social-network/internal/config"
 	"social-network/internal/models"
 	"social-network/internal/response"
 	"time"
@@ -44,13 +45,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		response.Error(w, apperror.BadInput("invalid JSON"), http.StatusBadRequest)
 		return
 	}
- 
+
 	authResp, err := h.authService.Login(req.Email, req.Password)
 	if err != nil {
 		writeServiceError(w, err)
 		return
 	}
- 
+
 	setSessionCookie(w, authResp.Token)
 	response.JSON(w, http.StatusOK, authResp)
 }
@@ -65,12 +66,12 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		response.NoContent(w)
 		return
 	}
- 
+
 	if err := h.authService.Logout(cookie.Value); err != nil {
 		writeServiceError(w, err)
 		return
 	}
- 
+
 	// Clear the cookie on the client
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_token",
@@ -79,8 +80,9 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   config.SecureCookiesEnabled(),
 	})
- 
+
 	response.NoContent(w)
 }
 
@@ -92,6 +94,6 @@ func setSessionCookie(w http.ResponseWriter, token string) {
 		Expires:  time.Now().Add(7 * 24 * time.Hour),
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		// Secure: true, // TODO: uncomment this in production
+		Secure:   config.SecureCookiesEnabled(),
 	})
 }
