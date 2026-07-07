@@ -6,6 +6,7 @@ CREATE TABLE notifications (
     group_id TEXT,
     event_id TEXT,
     is_read BOOLEAN NOT NULL DEFAULT 0,
+    is_resolved BOOLEAN NOT NULL DEFAULT 0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (actor_id) REFERENCES users(id) ON DELETE CASCADE,

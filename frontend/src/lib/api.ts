@@ -605,9 +605,12 @@ export type NotificationItem = {
 	type: string;
 	actor_id: string;
 	actor?: PublicUser;
+	group_id?: string;
+	event_id?: string;
 	message?: string;
 	created_at: string;
 	is_read: boolean;
+	is_resolved?: boolean;
 };
 
 export type NotificationListResponse = {
@@ -636,6 +639,12 @@ export const notificationsAPI = {
 		});
 	},
 
+	resolve(notificationId: string) {
+		return request<void>(`/api/notifications/${notificationId}/resolve`, {
+			method: 'POST',
+		});
+	},
+
 	// Mark every notification as read.
 	markAllAsRead() {
 		return request<void>('/api/notifications/read-all', {
@@ -645,7 +654,7 @@ export const notificationsAPI = {
 
 	// Accept/decline a follow request notification.
 	respondToFollowRequest(actorId: string, accept: boolean) {
-		return request<void>(`/api/follow-requests/${actorId}/${accept ? 'accept' : 'decline'}`, {
+		return request<void>(`/api/follow/${actorId}/${accept ? 'accept' : 'decline'}`, {
 			method: 'POST',
 		});
 	},

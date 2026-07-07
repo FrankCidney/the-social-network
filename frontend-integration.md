@@ -20,16 +20,17 @@ Status meanings:
 | Area | Status | Notes |
 | --- | --- | --- |
 | Environment/API base URL | Done | `NEXT_PUBLIC_API_URL` is wired through `api.ts`; requests include credentials. |
-| Auth register/login | Done | Register and login pages call matching backend routes. |
-| Auth logout | Pending | Backend route exists, but frontend sidebar logout is still just a link to `/login`. |
-| Profile | Partial | Own profile load/update/avatar plus public profile by id are integrated. Following list still has no dedicated UI surface beyond stats modal. |
-| Follow flows | Partial | Follow/unfollow/request is wired on profile pages; accept/decline follow requests and broader discovery follow CTAs are still pending. |
+| Auth register/login | Done | Register and login pages call matching backend routes. Register UI now also collects optional `about_me` and optional avatar upload after signup. |
+| Auth logout | Done | Sidebar logout now calls `POST /api/auth/logout` and redirects cleanly to login. |
+| Auth guarding | Done | Main app routes now verify session and redirect unauthenticated users to `/login?next=...` before rendering protected pages. |
+| Profile | Partial | Own profile load/update/avatar plus public profile by id are integrated. Private-profile restrictions now hide protected stats/details for unauthorized viewers. Follow request sending, pending state, and notification-based accept/decline are working. |
+| Follow flows | Partial | The main follow flow is working: public profiles auto-follow, private profiles create pending requests, profile UI shows `Requested`, unfollow works, and accept/decline works through notifications. Remaining gaps are a dedicated non-notification follow-request management surface and broader discovery follow CTAs. |
 | Feed/posts | Partial | Feed, create post, get post, upload post image, comments, and replies are integrated; edit/delete post still missing. |
 | Comments | Partial | Fetch/create comments and comment image upload are integrated in feed; delete comment is still missing. |
 | Groups/events | Partial | Group browse, create, detail, join, members, invite picker, events, creator/member/request state, and RSVP wiring are in place. |
-| Chat/messages | Partial | Private messages are wired, including opening a direct thread from profile/discovery. Group chat remains wired inside group detail. Presence/online status is not implemented. |
-| Notifications | Pending | Frontend has notification HTTP helpers/UI assumptions, but those routes are still not registered in `routes.go`. |
-| WebSocket | Partial | Frontend connects to `/api/ws`. Group and follow notifications depend on backend payload/route coverage beyond the current HTTP work. |
+| Chat/messages | Partial | Private messages are wired, including opening a direct thread from profile/discovery. Conversation read state is wired; handled backend business errors now map to page/component UI state instead of surfacing as app-breaking UI errors. Group chat remains inside group detail. Presence/online status is not implemented. |
+| Notifications | Done | Bell dropdown and notifications page are now wired to backend routes through shared frontend state. Read/unread state, live websocket updates, action buttons, actor names, and backend-backed resolved state are implemented. |
+| WebSocket | Partial | Frontend connects to `/api/ws`. Chat works; notification websocket events are now hooked into shared notification state. Presence/online status is still not implemented. |
 
 ## Route Checklist
 
@@ -39,7 +40,7 @@ Status meanings:
 | --- | --- | --- | --- |
 | `POST /api/auth/register` | Done | `authAPI.register`, `app/(auth)/register/page.tsx` | Registration posts to backend and redirects to feed. |
 | `POST /api/auth/login` | Done | `authAPI.login`, `app/(auth)/login/page.tsx` | Login posts to backend and redirects to feed. |
-| `POST /api/auth/logout` | Pending | None | Add `authAPI.logout()` and wire the sidebar logout action. |
+| `POST /api/auth/logout` | Done | `authAPI.logout`, `app/(main)/layout.tsx` | Sidebar logout now calls the backend route and redirects to login. |
 
 ### Profile and Users
 
@@ -49,19 +50,19 @@ Status meanings:
 | `GET /api/profile/{id}` | Done | `profileAPI.getProfile`, `app/(main)/profile/[id]/page.tsx` | Public/other-user profile route is now wired, including follow and message entry points. |
 | `PUT /api/profile` | Done | `profileAPI.updateProfile`, `app/(main)/profile/page.tsx` | Wrapper updates then refetches `/api/profile` because backend returns `204`. |
 | `POST /api/profile/avatar` | Done | `profileAPI.uploadAvatar`, `app/(main)/profile/page.tsx` | Avatar upload uses `avatar` form field. |
-| `GET /api/users/{id}/followers` | Done | `profileAPI.getFollowers`, `app/(main)/feed/page.tsx` | Used for private post audience selection. |
-| `GET /api/users/{id}/following` | Partial | `profileAPI.getFollowing`, profile stats modal | Helper is wired in the profile stats modal; no standalone following page/list flow yet. |
+| `GET /api/users/{id}/followers` | Done | `profileAPI.getFollowers`, feed composer and profile stats modal | Used for private post audience selection and profile stats modal. Private profiles now forbid unauthorized access in backend. |
+| `GET /api/users/{id}/following` | Partial | `profileAPI.getFollowing`, profile stats modal | Helper is wired in the profile stats modal; no standalone following page/list flow yet. Private profiles now forbid unauthorized access in backend. |
 | `GET /api/users/search` | Done | `profileAPI.searchUsers`, layout discovery panel and group manage tab | Used for people discovery and invite picking. |
 
 ### Follow Requests
 
 | Backend route | Frontend status | Frontend location | Notes |
 | --- | --- | --- | --- |
-| `POST /api/follow/requests` | Pending | None | Route method still needs confirmation against intended behavior. |
+| `POST /api/follow/requests` | Partial | None | Backend currently registers this as `POST`, but the handler/comment describe a read-style pending-requests endpoint. No frontend surface uses it right now. Existing notification helper should not assume this route for accept/decline actions. |
 | `POST /api/follow/{id}` | Done | `followAPI.follow`, `app/(main)/profile/[id]/page.tsx` | Profile CTA respects backend public/private follow behavior. |
 | `DELETE /api/follow/{id}` | Done | `followAPI.unfollow`, `app/(main)/profile/[id]/page.tsx` | Profile unfollow CTA is wired. |
-| `POST /api/follow/{id}/accept` | Pending | None | Needed for accepting follow requests. |
-| `POST /api/follow/{id}/decline` | Pending | None | Needed for declining follow requests. |
+| `POST /api/follow/{id}/accept` | Done | `notificationsAPI.respondToFollowRequest`, notifications dropdown/page | Accept follow-request action is wired from notifications. |
+| `POST /api/follow/{id}/decline` | Done | `notificationsAPI.respondToFollowRequest`, notifications dropdown/page | Decline follow-request action is wired from notifications. |
 
 ### Posts and Feed
 
@@ -122,15 +123,53 @@ Status meanings:
 
 ### Notifications
 
-`routes.go` still does not register HTTP notification routes, but `frontend/src/lib/api.ts` and `app/(main)/notifications/page.tsx` assume these endpoints:
+Notifications are now wired end to end.
+
+Backend work now in place:
+
+- Added notification repo/service/handler scaffolding:
+  - `backend/internal/repository/notification_repo.go`
+  - `backend/internal/notification/service.go`
+  - `backend/internal/handlers/notifications.go`
+- Added route registration in `backend/internal/routes/routes.go` for:
+  - `GET /api/notifications`
+  - `POST /api/notifications/{notificationId}/read`
+  - `POST /api/notifications/{notificationId}/resolve`
+  - `POST /api/notifications/read-all`
+- Wired notification service into `backend/cmd/main.go`
+- Added notification persistence hooks for:
+  - private follow request
+  - follow accepted
+  - group invite
+  - group join request to group creator
+  - group event created
+- `NotifyUser` was also corrected so persisted notifications get a fresh notification ID per recipient and a default timestamp when one is not supplied.
+- Notification rows now include actor profile data for better UI copy.
+- Notifications now have backend `is_resolved` state, plus a frontend fallback so action buttons stay hidden immediately after acting even if the current environment is stale.
+
+Frontend work now in place:
+
+- Added shared notification state via `frontend/src/contexts/NotificationsContext.tsx`
+- Hooked `frontend/src/components/notifications/NotificationDropdown.tsx` to shared notification state
+- Hooked `frontend/src/app/(main)/notifications/page.tsx` to shared notification state
+- Wired websocket notification pushes into the shared state
+- Added mark-as-read, mark-all-read, and resolve handling
+- Wired action buttons for:
+  - follow request accept/decline
+  - group invite accept/decline
+  - group join request accept/decline
+- Updated notification UI to show actor names instead of raw IDs when backend actor data is present
+
+Current notification routes and status:
 
 | Frontend route | Status | Notes |
 | --- | --- | --- |
-| `GET /api/notifications` | Pending | No registered backend route. |
-| `POST /api/notifications/{notificationId}/read` | Pending | No registered backend route. |
-| `POST /api/notifications/read-all` | Pending | No registered backend route. |
-| `POST /api/follow-requests/{actorId}/accept` | Pending | No registered backend route; backend uses `POST /api/follow/{id}/accept`. |
-| `POST /api/follow-requests/{actorId}/decline` | Pending | No registered backend route; backend uses `POST /api/follow/{id}/decline`. |
+| `GET /api/notifications` | Done | Used by shared notification state for bell dropdown and notifications page. |
+| `POST /api/notifications/{notificationId}/read` | Done | Used by shared notification state for single-item reads. |
+| `POST /api/notifications/{notificationId}/resolve` | Done | Used after actionable notification decisions so buttons do not return after refresh. |
+| `POST /api/notifications/read-all` | Done | Used by shared notification state for bulk read handling. |
+| `POST /api/follow-requests/{actorId}/accept` | Not used | This fake route should not be implemented. Frontend uses `POST /api/follow/{id}/accept`. |
+| `POST /api/follow-requests/{actorId}/decline` | Not used | This fake route should not be implemented. Frontend uses `POST /api/follow/{id}/decline`. |
 
 ## Known Issues
 
@@ -143,6 +182,15 @@ Impact:
 - Existing local databases need the new migration applied by restarting the backend so unread/read-aware conversation queries work.
 - Without the migration, conversation list queries can fail with `no such column: read_at`.
 
+### Notification Migration
+
+Notifications now expect the `is_resolved` column.
+
+Impact:
+
+- Existing local databases need the new notification migration applied by restarting the backend.
+- Without that migration, notification resolve behavior can fail or behave inconsistently.
+
 ## UI and Code Pattern Notes
 
 - Keep the current UI style and visual language.
@@ -153,32 +201,26 @@ Impact:
   - side panel with tabs for chat, events, members, and management
 - Group posts should continue to look like app feed posts rather than a totally separate visual system.
 
-## Recommended Next Step
+## Next Step
 
-### Finish Follow Request and Notification Flows
+Notifications are no longer the next step. They are implemented.
 
-Next backend/frontend work should focus on the remaining follow-request and notification gaps.
+### Recommended Next Step
 
-Why next:
+Finish the remaining non-notification social flows before moving to lower-priority polish.
 
-- Profile follow/unfollow is wired, but accepting/declining follow requests is still not surfaced cleanly.
-- Notification UI still assumes HTTP routes that are not registered in `routes.go`.
-- Logout is still a placeholder link and is one of the remaining auth integration gaps.
+Best next focus:
 
-Recommended scope:
+1. Decide whether the project needs a dedicated pending follow-requests surface outside notifications, and if yes, wire it to the backend pending-requests endpoint after cleaning up that route method mismatch.
+2. Add edit/delete post flows.
+3. Add delete comment flow.
+4. Revisit whether people discovery should regain direct follow CTAs.
 
-- add/wire follow request accept and decline flows
-- either implement notification HTTP routes or remove/disable those frontend assumptions
-- add real logout action wiring
+Why this is next:
 
-## Recommended Next Steps After That
-
-1. Finish follow request accept/decline UX and notification-driven actions.
-2. Add logout action wiring.
-3. Revisit notification HTTP routes or remove/disable the current notification HTTP assumptions.
-4. Add edit/delete post flows.
-5. Add delete comment flow.
-6. Decide whether people discovery should gain direct follow CTAs again after shared-state syncing is in place.
+- Notifications, bell unread state, live updates, and action handling are already wired.
+- The biggest remaining user-facing gaps are now follow-management completeness and missing post/comment CRUD actions.
+- These are more important submission gaps than revisiting notification infrastructure again.
 
 ## Verification
 
@@ -187,3 +229,6 @@ After each integration area:
 - run `npx tsc --noEmit` in `frontend/`
 - run targeted browser testing against backend on `http://localhost:8080`
 - where backend changes were made, run targeted Go package tests/build checks
+- for notifications specifically:
+  - restart backend so the latest notification migrations apply
+  - test bell unread state, notifications page loading, mark-as-read, resolve behavior, and websocket-delivered notification sync

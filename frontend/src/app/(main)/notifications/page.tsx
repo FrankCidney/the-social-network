@@ -1,194 +1,115 @@
 'use client';
 
+import Link from 'next/link';
 import * as React from 'react';
 import { motion } from 'framer-motion';
-import { Bell, CheckCircle2, Clock3, MessageSquare, Sparkles, Users } from 'lucide-react';
+import { Bell, CheckCircle2, Clock3 } from 'lucide-react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useNotifications } from '@/contexts/NotificationsContext';
 import {
-  isAuthenticationError,
-  notificationsAPI,
-  NotificationItem,
-  NotificationListResponse,
-} from '@/lib/api';
-
-function formatTimestamp(value: string) {
-  const date = new Date(value);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins} minute${diffMins === 1 ? '' : 's'} ago`;
-
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
-
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
-}
-
-function getNotificationTitle(type: string) {
-  switch (type) {
-    case 'follow_request':
-      return 'Follow request';
-    case 'group_invite':
-      return 'Group invite';
-    case 'group_event':
-      return 'Group update';
-    case 'notification':
-      return 'New activity';
-    default:
-      return 'Notification';
-  }
-}
-
-function getNotificationDescription(type: string, actorId: string) {
-  switch (type) {
-    case 'follow_request':
-      return `User ${actorId} wants to follow you.`;
-    case 'group_invite':
-      return `User ${actorId} invited you to join a group.`;
-    case 'group_event':
-      return `User ${actorId} shared a new group update.`;
-    case 'notification':
-      return `User ${actorId} triggered a new notification.`;
-    default:
-      return `User ${actorId} sent an update.`;
-  }
-}
-
-function getNotificationIcon(type: string) {
-  switch (type) {
-    case 'follow_request':
-      return <Users className="w-5 h-5 text-indigo-600" />;
-    case 'group_invite':
-    case 'group_event':
-      return <Sparkles className="w-5 h-5 text-amber-600" />;
-    case 'notification':
-      return <MessageSquare className="w-5 h-5 text-emerald-600" />;
-    default:
-      return <Bell className="w-5 h-5 text-slate-600" />;
-  }
-}
-
-// The endpoint may return a bare array or a wrapped object — handle both.
-function unwrapNotifications(
-  data: NotificationListResponse | NotificationItem[]
-): NotificationItem[] {
-  return Array.isArray(data) ? data : data.notifications;
-}
+  formatNotificationTimestamp,
+  getNotificationActionLabel,
+  getNotificationDescription,
+  getNotificationIcon,
+  getNotificationLink,
+  getNotificationTitle,
+  isNotificationActionable,
+  notificationResolvedIcon,
+} from '@/components/notifications/notificationUtils';
+import type { NotificationItem } from '@/lib/api';
 
 export default function NotificationsPage() {
-  const { socket, isConnected } = useWebSocket();
-
-  const [notifications, setNotifications] = React.useState<NotificationItem[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
+  const { isConnected } = useWebSocket();
+  const {
+    notifications,
+    loading,
+    error,
+    unreadCount,
+    refresh,
+    markAsRead,
+    markAllAsRead,
+    actOnNotification,
+  } = useNotifications();
   const [markingAll, setMarkingAll] = React.useState(false);
-
-  const loadNotifications = React.useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await notificationsAPI.getNotifications();
-      setNotifications(unwrapNotifications(data));
-      setError(null);
-    } catch (err) {
-      if (!isAuthenticationError(err)) {
-        setError(err instanceof Error ? err.message : 'Could not load your notifications.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const [busyKey, setBusyKey] = React.useState<string | null>(null);
+  const [actionError, setActionError] = React.useState<string | null>(null);
+  const autoMarkedRef = React.useRef(false);
 
   React.useEffect(() => {
-    loadNotifications();
-  }, [loadNotifications]);
+    if (loading || autoMarkedRef.current) return;
 
-  // Live notifications pushed over the shared WebSocket connection.
-  React.useEffect(() => {
-    if (!socket) return;
+    autoMarkedRef.current = true;
+    if (unreadCount === 0) return;
 
-    const handleMessage = (event: MessageEvent) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (
-          data.type === 'notification' ||
-          data.type === 'follow_request' ||
-          data.type === 'group_invite' ||
-          data.type === 'group_event'
-        ) {
-          const payload = data.payload as NotificationItem;
-          setNotifications((prev) => {
-            if (prev.some((item) => item.id === payload.id)) return prev;
-            return [
-              {
-                ...payload,
-                message: payload.message ?? getNotificationDescription(payload.type, payload.actor_id),
-              },
-              ...prev,
-            ];
-          });
-        }
-      } catch (err) {
-        console.error('Failed to parse notification payload', err);
-      }
-    };
-
-    socket.addEventListener('message', handleMessage);
-    return () => socket.removeEventListener('message', handleMessage);
-  }, [socket]);
-
-  const unreadCount = notifications.filter((item) => !item.is_read).length;
+    void markAllAsRead().catch((err) => {
+      setActionError(
+        err instanceof Error ? err.message : 'Could not mark your notifications as read.'
+      );
+    });
+  }, [loading, markAllAsRead, unreadCount]);
 
   const handleMarkAsRead = async (notificationId: string) => {
-    const previous = notifications;
-    setNotifications((prev) =>
-      prev.map((item) => (item.id === notificationId ? { ...item, is_read: true } : item))
-    );
+    setActionError(null);
+
     try {
-      await notificationsAPI.markAsRead(notificationId);
+      await markAsRead(notificationId);
     } catch (err) {
-      setNotifications(previous); // roll back on failure
-      setError(err instanceof Error ? err.message : 'Could not update this notification.');
+      setActionError(err instanceof Error ? err.message : 'Could not update this notification.');
     }
   };
 
-  const markAllAsRead = async () => {
+  const handleMarkAllAsRead = async () => {
     if (unreadCount === 0) return;
-    const previous = notifications;
-    setNotifications((prev) => prev.map((item) => ({ ...item, is_read: true })));
+
     try {
       setMarkingAll(true);
-      await notificationsAPI.markAllAsRead();
+      setActionError(null);
+      await markAllAsRead();
     } catch (err) {
-      setNotifications(previous);
-      setError(err instanceof Error ? err.message : 'Could not mark everything as read. Please try again.');
+      setActionError(
+        err instanceof Error ? err.message : 'Could not mark everything as read. Please try again.'
+      );
     } finally {
       setMarkingAll(false);
     }
   };
 
+  const handleDecision = async (
+    notification: NotificationItem,
+    decision: 'accept' | 'decline'
+  ) => {
+    setBusyKey(`${notification.id}:${decision}`);
+    setActionError(null);
+
+    try {
+      await actOnNotification(notification, decision);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not update this notification.');
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-xl border border-gray-100 p-6">
+      <div className="rounded-xl border border-gray-100 bg-white p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-              <div className="p-2 bg-amber-100 rounded-lg">
+            <h1 className="flex items-center gap-3 text-3xl font-bold text-gray-900">
+              <div className="rounded-lg bg-amber-100 p-2">
                 <Bell className="w-6 h-6 text-amber-600" />
               </div>
               Notifications
             </h1>
-            <p className="text-gray-500 text-sm mt-2">
-              Keep track of follow requests, group invites, and other recent activity in one place.
+            <p className="mt-2 text-sm text-gray-500">
+              Keep track of follow requests, group invites, approvals, and event updates in one place.
             </p>
           </div>
 
           <button
-            onClick={markAllAsRead}
+            onClick={handleMarkAllAsRead}
             disabled={markingAll || unreadCount === 0}
-            className="inline-flex items-center gap-2 rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 rounded-full border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <CheckCircle2 className="w-4 h-4" />
             {markingAll ? 'Marking…' : 'Mark all read'}
@@ -215,12 +136,12 @@ export default function NotificationsPage() {
         {loading && (
           <div className="space-y-4">
             {[1, 2, 3].map((i) => (
-              <div key={i} className="bg-white rounded-xl border border-gray-100 p-4 animate-pulse">
+              <div key={i} className="animate-pulse rounded-xl border border-gray-100 bg-white p-4">
                 <div className="flex items-start gap-3">
-                  <div className="w-9 h-9 rounded-full bg-gray-100 shrink-0" />
+                  <div className="h-9 w-9 shrink-0 rounded-full bg-gray-100" />
                   <div className="flex-1 space-y-2">
-                    <div className="w-40 h-3 bg-gray-100 rounded" />
-                    <div className="w-64 h-3 bg-gray-100 rounded" />
+                    <div className="h-3 w-40 rounded bg-gray-100" />
+                    <div className="h-3 w-64 rounded bg-gray-100" />
                   </div>
                 </div>
               </div>
@@ -228,13 +149,16 @@ export default function NotificationsPage() {
           </div>
         )}
 
+        {!loading && actionError && (
+          <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+            {actionError}
+          </div>
+        )}
+
         {!loading && error && (
-          <div className="bg-white rounded-xl border border-gray-100 p-8 text-center">
-            <p className="text-sm text-red-600 mb-3">{error}</p>
-            <button
-              onClick={loadNotifications}
-              className="text-sm text-indigo-600 hover:underline"
-            >
+          <div className="rounded-xl border border-gray-100 bg-white p-8 text-center">
+            <p className="mb-3 text-sm text-red-600">{error}</p>
+            <button onClick={refresh} className="text-sm text-indigo-600 hover:underline">
               Retry
             </button>
           </div>
@@ -244,11 +168,11 @@ export default function NotificationsPage() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="bg-white rounded-xl border border-gray-100 p-12 text-center"
+            className="rounded-xl border border-gray-100 bg-white p-12 text-center"
           >
-            <Bell className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-bold text-gray-900 mb-2">No notifications yet</h3>
-            <p className="text-gray-500 text-sm">
+            <Bell className="mx-auto mb-4 h-12 w-12 text-gray-300" />
+            <h3 className="mb-2 text-lg font-bold text-gray-900">No notifications yet</h3>
+            <p className="text-sm text-gray-500">
               New activity will appear here as soon as the app sends it.
             </p>
           </motion.div>
@@ -256,40 +180,105 @@ export default function NotificationsPage() {
 
         {!loading &&
           !error &&
-          notifications.map((notification, index) => (
-            <motion.div
-              key={notification.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.04 }}
-              onClick={() => !notification.is_read && handleMarkAsRead(notification.id)}
-              className={`rounded-xl border p-4 transition-colors ${
-                notification.is_read
-                  ? 'border-gray-100 bg-white'
-                  : 'border-indigo-100 bg-indigo-50/70 cursor-pointer hover:bg-indigo-50'
-              }`}
-            >
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 rounded-full bg-white p-2 shadow-sm">
-                  {getNotificationIcon(notification.type)}
-                </div>
-                <div className="flex-1">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="font-semibold text-gray-900">{getNotificationTitle(notification.type)}</p>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {notification.message ?? getNotificationDescription(notification.type, notification.actor_id)}
-                      </p>
+          notifications.map((notification, index) => {
+            const actionable = isNotificationActionable(notification);
+            const link = getNotificationLink(notification);
+
+            return (
+              <motion.div
+                key={notification.id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.04 }}
+                onClick={() => {
+                  if (!notification.is_read) {
+                    void handleMarkAsRead(notification.id);
+                  }
+                }}
+                className={`rounded-xl border p-4 transition-colors ${
+                  notification.is_read
+                    ? 'border-gray-100 bg-white'
+                    : 'cursor-pointer border-indigo-100 bg-indigo-50/70 hover:bg-indigo-50'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 rounded-full bg-white p-2 shadow-sm">
+                    {getNotificationIcon(notification.type)}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-gray-900">
+                            {getNotificationTitle(notification.type)}
+                          </p>
+                          {!notification.is_read && (
+                            <span className="h-2.5 w-2.5 rounded-full bg-indigo-500" />
+                          )}
+                        </div>
+                        <p className="mt-1 text-sm text-gray-600">
+                          {getNotificationDescription(notification)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <Clock3 className="w-3.5 h-3.5" />
+                        {formatNotificationTimestamp(notification.created_at)}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <Clock3 className="w-3.5 h-3.5" />
-                      {formatTimestamp(notification.created_at)}
+
+                    <div className="mt-4 flex flex-wrap items-center gap-2">
+                      {actionable &&
+                        (['accept', 'decline'] as const).map((decision) => {
+                          const actionKey = `${notification.id}:${decision}`;
+                          const isBusy = busyKey === actionKey;
+                          const isAccept = decision === 'accept';
+
+                          return (
+                            <button
+                              key={decision}
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void handleDecision(notification, decision);
+                              }}
+                              disabled={Boolean(busyKey)}
+                              className={`rounded-full px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                                isAccept
+                                  ? 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                  : 'border border-gray-200 text-gray-700 hover:bg-gray-50'
+                              }`}
+                            >
+                              {isBusy
+                                ? 'Working...'
+                                : getNotificationActionLabel(notification, isAccept)}
+                            </button>
+                          );
+                        })}
+
+                      {link && (
+                        <Link
+                          href={link}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                          }}
+                          className="text-sm font-medium text-indigo-600 hover:text-indigo-700"
+                        >
+                          Open related page
+                        </Link>
+                      )}
+
+                      {notification.is_read && (
+                        <span className="inline-flex items-center gap-1 text-sm text-emerald-600">
+                          {notificationResolvedIcon}
+                          Read
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            );
+          })}
       </div>
     </div>
   );

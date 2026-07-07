@@ -39,6 +39,13 @@ type FollowListResponse struct {
 	Offset int           `json:"offset"`
 }
 
+type NotificationListResponse struct {
+	Notifications []*Notification `json:"notifications"`
+	Total         int             `json:"total"`
+	Limit         int             `json:"limit"`
+	Offset        int             `json:"offset"`
+}
+
 type UserSearchResult struct {
 	ID                  string `json:"id"`
 	FirstName           string `json:"first_name"`

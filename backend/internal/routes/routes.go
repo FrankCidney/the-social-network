@@ -17,6 +17,7 @@ func NewRouter(
 	wsHandler *handlers.WebSocketHandler,
 	groupHandler *handlers.GroupHandler,
 	chatHandler *handlers.ChatHandler,
+	notificationHandler *handlers.NotificationHandler,
 	authService auth.Service,
 ) http.Handler {
 	mux := http.NewServeMux()
@@ -28,6 +29,7 @@ func NewRouter(
 	registerCommentRoutes(mux, commentHandler, authService)
 	registerGroupRoutes(mux, groupHandler, authService)
 	registerChatRoutes(mux, chatHandler, authService)
+	registerNotificationRoutes(mux, notificationHandler, authService)
 
 	mux.Handle("GET /api/ws", middleware.RequireAuth(authService, http.HandlerFunc(wsHandler.ServeWS)))
 
@@ -105,4 +107,11 @@ func registerChatRoutes(mux *http.ServeMux, h *handlers.ChatHandler, authService
 	mux.Handle("GET /api/groups/{id}/messages", middleware.RequireAuth(authService, http.HandlerFunc(h.GetGroupMessages)))
 	mux.Handle("GET /api/chat/conversations", middleware.RequireAuth(authService, http.HandlerFunc(h.GetConversations)))
 	mux.Handle("POST /api/chat/conversations/{userId}/read", middleware.RequireAuth(authService, http.HandlerFunc(h.MarkConversationRead)))
+}
+
+func registerNotificationRoutes(mux *http.ServeMux, h *handlers.NotificationHandler, authService auth.Service) {
+	mux.Handle("GET /api/notifications", middleware.RequireAuth(authService, http.HandlerFunc(h.GetNotifications)))
+	mux.Handle("POST /api/notifications/{notificationId}/read", middleware.RequireAuth(authService, http.HandlerFunc(h.MarkAsRead)))
+	mux.Handle("POST /api/notifications/{notificationId}/resolve", middleware.RequireAuth(authService, http.HandlerFunc(h.MarkAsResolved)))
+	mux.Handle("POST /api/notifications/read-all", middleware.RequireAuth(authService, http.HandlerFunc(h.MarkAllAsRead)))
 }

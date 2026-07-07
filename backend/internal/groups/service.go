@@ -7,7 +7,6 @@ import (
 	"social-network/internal/apperror"
 	"social-network/internal/models"
 	"social-network/internal/repository"
-	"social-network/internal/websocket"
 
 	"github.com/google/uuid"
 )
@@ -30,13 +29,18 @@ type Service interface {
 	RSVPEvent(eventID, userID, status string) error
 }
 
+type NotificationService interface {
+	NotifyUser(userID string, notification *models.Notification) error
+	NotifyGroup(userIDs []string, notification *models.Notification) error
+}
+
 type service struct {
 	groupRepo repository.GroupRepository
 	userRepo  repository.UserRepository
-	notifier  websocket.Notifier
+	notifier  NotificationService
 }
 
-func NewService(groupRepo repository.GroupRepository, userRepo repository.UserRepository, notifier websocket.Notifier) Service {
+func NewService(groupRepo repository.GroupRepository, userRepo repository.UserRepository, notifier NotificationService) Service {
 	return &service{
 		groupRepo: groupRepo,
 		userRepo:  userRepo,
@@ -139,7 +143,16 @@ func (s *service) RequestJoin(groupID, userID string) error {
 		return fmt.Errorf("request join group: %w", err)
 	}
 
-	// TODO: Notify group creator
+	group, err := s.groupRepo.GetGroupByID(groupID)
+	if err == nil && s.notifier != nil && group.CreatorID != userID {
+		_ = s.notifier.NotifyUser(group.CreatorID, &models.Notification{
+			ActorID:   userID,
+			Type:      "group_join_request",
+			GroupID:   &groupID,
+			CreatedAt: time.Now(),
+		})
+	}
+
 	return nil
 }
 
@@ -167,7 +180,7 @@ func (s *service) InviteUser(groupID, inviterID, inviteeID string) error {
 	}
 
 	if s.notifier != nil {
-		s.notifier.NotifyUser(inviteeID, &models.Notification{
+		_ = s.notifier.NotifyUser(inviteeID, &models.Notification{
 			ID:        uuid.NewString(),
 			UserID:    inviteeID,
 			ActorID:   inviterID,
@@ -298,7 +311,7 @@ func (s *service) CreateEvent(userID string, groupID string, req *models.CreateE
 				memberIDs = append(memberIDs, m.ID)
 			}
 		}
-		s.notifier.NotifyGroup(memberIDs, &models.Notification{
+		_ = s.notifier.NotifyGroup(memberIDs, &models.Notification{
 			ID:        uuid.NewString(),
 			ActorID:   userID,
 			Type:      "group_event",

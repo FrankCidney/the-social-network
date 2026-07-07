@@ -13,6 +13,7 @@ import (
 	"social-network/internal/follow"
 	"social-network/internal/groups"
 	"social-network/internal/handlers"
+	"social-network/internal/notification"
 	"social-network/internal/post"
 	"social-network/internal/repository"
 	"social-network/internal/routes"
@@ -48,17 +49,19 @@ func main() {
 	commentRepo := repository.NewCommentRepository(store.DB)
 	groupRepo := repository.NewGroupRepository(store.DB)
 	msgRepo := repository.NewMessageRepository(store.DB)
+	notificationRepo := repository.NewNotificationRepository(store.DB)
 
 	// WebSockets
 	wsManager := websocket.NewManager()
 	wsNotifier := websocket.NewWSNotifier(wsManager)
 	wsHandler := handlers.NewWebSocketHandler(wsManager)
+	notificationService := notification.NewService(notificationRepo, userRepo, wsNotifier)
 
 	// Services
 	authService := auth.NewService(userRepo, sessionRepo)
 	userService := user.NewService(userRepo, followRepo, postRepo)
-	followService := follow.NewService(userRepo, followRepo, wsNotifier)
-	groupService := groups.NewService(groupRepo, userRepo, wsNotifier)
+	followService := follow.NewService(userRepo, followRepo, notificationService)
+	groupService := groups.NewService(groupRepo, userRepo, notificationService)
 	chatService := chat.NewService(msgRepo, groupRepo, followRepo, wsNotifier)
 	postService := post.NewService(postRepo, userRepo, followRepo, groupService)
 	commentService := comment.NewService(commentRepo, userRepo, postService)
@@ -71,6 +74,7 @@ func main() {
 	commentHandler := handlers.NewCommentHandler(commentService)
 	groupHandler := handlers.NewGroupHandler(groupService)
 	chatHandler := handlers.NewChatHandler(chatService)
+	notificationHandler := handlers.NewNotificationHandler(notificationService)
 
 	// Routes
 	apiMux := routes.NewRouter(
@@ -82,6 +86,7 @@ func main() {
 		wsHandler,
 		groupHandler,
 		chatHandler,
+		notificationHandler,
 		authService,
 	)
 

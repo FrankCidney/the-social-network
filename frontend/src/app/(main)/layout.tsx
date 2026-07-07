@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Home, Users, MessageSquare, Bell, User, LogOut, Search } from 'lucide-react';
 import { PeopleDiscoveryPanel } from '@/components/discovery/PeopleDiscoveryPanel';
 import { WebSocketProvider } from '@/contexts/WebSocketContext';
+import { NotificationsProvider } from '@/contexts/NotificationsContext';
 import { NotificationDropdown } from '@/components/notifications/NotificationDropdown';
 import { authAPI, isAuthenticationError, profileAPI } from '@/lib/api';
 
@@ -106,62 +107,64 @@ export default function MainLayout({
 
   return (
     <WebSocketProvider>
-      <div className="min-h-screen bg-gray-50">
-        {/* Navigation Bar */}
-        <nav className="sticky top-0 z-50 bg-white border-b border-gray-100">
-          <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-            <div className="flex items-center gap-8">
-              <Link href="/feed" className="text-2xl font-bold text-indigo-600">Social</Link>
-              <div className="hidden md:flex relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input 
-                  type="text" 
-                  placeholder="Search social..." 
-                  className="bg-gray-100 rounded-full py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64 transition-all"
-                />
+      <NotificationsProvider>
+        <div className="min-h-screen bg-gray-50">
+          {/* Navigation Bar */}
+          <nav className="sticky top-0 z-50 bg-white border-b border-gray-100">
+            <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+              <div className="flex items-center gap-8">
+                <Link href="/feed" className="text-2xl font-bold text-indigo-600">Social</Link>
+                <div className="hidden md:flex relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Search social..." 
+                    className="bg-gray-100 rounded-full py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 w-64 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <NotificationDropdown />
+                <Link href="/profile" className="flex items-center gap-2 p-1 pl-3 rounded-full hover:bg-gray-100 transition-colors">
+                  <span className="text-sm font-medium hidden sm:inline">My Profile</span>
+                  <div className="w-8 h-8 rounded-full bg-indigo-100" />
+                </Link>
               </div>
             </div>
-            
-            <div className="flex items-center gap-2">
-              <NotificationDropdown />
-              <Link href="/profile" className="flex items-center gap-2 p-1 pl-3 rounded-full hover:bg-gray-100 transition-colors">
-                <span className="text-sm font-medium hidden sm:inline">My Profile</span>
-                <div className="w-8 h-8 rounded-full bg-indigo-100" />
-              </Link>
-            </div>
+          </nav>
+
+          <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-12 gap-6">
+            {/* Sidebar */}
+            <aside className="hidden md:block md:col-span-3 space-y-2">
+              <SidebarItem icon={<Home className="w-5 h-5" />} label="Home Feed" href="/feed" active={pathname === '/feed'} />
+              <SidebarItem icon={<Users className="w-5 h-5" />} label="Groups" href="/groups" active={pathname.startsWith('/groups')} />
+              <SidebarItem icon={<MessageSquare className="w-5 h-5" />} label="Messages" href="/messages" active={pathname === '/messages'} />
+              <SidebarItem icon={<Bell className="w-5 h-5" />} label="Notifications" href="/notifications" active={pathname === '/notifications'} />
+              <SidebarItem icon={<User className="w-5 h-5" />} label="Profile" href="/profile" active={pathname === '/profile'} />
+              <hr className="my-4 border-gray-100" />
+              <SidebarAction
+                icon={<LogOut className="w-5 h-5" />}
+                label={isLoggingOut ? 'Logging out...' : 'Logout'}
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+              />
+            </aside>
+
+            {/* Main Content */}
+            <main className={isGroupsRoute ? 'md:col-span-9' : 'md:col-span-6'}>
+              {children}
+            </main>
+
+            {/* Right Sidebar (Suggestions/Trends) */}
+            {!isGroupsRoute && (
+              <aside className="hidden lg:block lg:col-span-3 space-y-6">
+                <PeopleDiscoveryPanel />
+              </aside>
+            )}
           </div>
-        </nav>
-
-      <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 md:grid-cols-12 gap-6">
-        {/* Sidebar */}
-        <aside className="hidden md:block md:col-span-3 space-y-2">
-          <SidebarItem icon={<Home className="w-5 h-5" />} label="Home Feed" href="/feed" active={pathname === '/feed'} />
-          <SidebarItem icon={<Users className="w-5 h-5" />} label="Groups" href="/groups" active={pathname.startsWith('/groups')} />
-          <SidebarItem icon={<MessageSquare className="w-5 h-5" />} label="Messages" href="/messages" active={pathname === '/messages'} />
-          <SidebarItem icon={<Bell className="w-5 h-5" />} label="Notifications" href="/notifications" active={pathname === '/notifications'} />
-          <SidebarItem icon={<User className="w-5 h-5" />} label="Profile" href="/profile" active={pathname === '/profile'} />
-          <hr className="my-4 border-gray-100" />
-          <SidebarAction
-            icon={<LogOut className="w-5 h-5" />}
-            label={isLoggingOut ? 'Logging out...' : 'Logout'}
-            onClick={handleLogout}
-            disabled={isLoggingOut}
-          />
-        </aside>
-
-          {/* Main Content */}
-          <main className={isGroupsRoute ? 'md:col-span-9' : 'md:col-span-6'}>
-            {children}
-          </main>
-
-          {/* Right Sidebar (Suggestions/Trends) */}
-          {!isGroupsRoute && (
-          <aside className="hidden lg:block lg:col-span-3 space-y-6">
-            <PeopleDiscoveryPanel />
-          </aside>
-          )}
         </div>
-      </div>
+      </NotificationsProvider>
     </WebSocketProvider>
   );
 }
